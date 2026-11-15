@@ -3,3 +3,293 @@
 @media(max-width:1200px){.stats-grid,.report-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.appointment-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.block-grid{grid-template-columns:1fr 1.3fr 1fr 1fr .8fr}.inbox-panel{grid-template-columns:275px minmax(0,1fr)}}
 @media(max-width:850px){.sidebar{width:205px}.main-area{margin-left:205px}.content{padding:22px 20px}.inbox-panel{grid-template-columns:235px minmax(0,1fr)}.inbox-list-head{padding-left:10px;padding-right:10px}.chat-detail{padding:0 12px 12px}.appointment-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.block-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.block-grid .wide-field{grid-column:span 2}.report-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.sidebar{display:none}.main-area{margin-left:0;padding-bottom:68px}.topbar{height:58px;padding:0 16px;justify-content:space-between}.mobile-brand{display:flex;align-items:center;gap:8px}.mobile-brand .brand-mark{width:31px;height:31px;border-radius:9px}.mobile-brand b{font-size:15px}.profile{display:none}.top-actions{gap:0}.content{padding:19px 13px 25px}.page-heading{align-items:flex-start}.page-heading h1{font-size:22px}.page-heading p{font-size:10px;line-height:1.5}.date-chip{display:none}.demo-strip{padding:9px;margin-bottom:18px}.demo-strip span{font-size:9px}.stats-grid,.report-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.metric-card{min-height:130px;padding:12px}.metric-value{font-size:20px}.metric-label{font-size:10px}.metric-foot small{font-size:8px}.trend{width:55px}.home-grid{grid-template-columns:1fr;gap:11px}.panel{padding:14px}.section-title h2{font-size:13px}.footer{font-size:8px;gap:10px}.inbox-global-search{flex-wrap:wrap;padding:9px}.inbox-global-search input{width:calc(100% - 35px);flex:auto}.calendar-sync{width:100%;padding-left:27px}.inbox-panel{display:flex;flex-direction:column;min-height:0}.inbox-list{border-right:0;border-bottom:1px solid #e9eef4}.inbox-list-head{padding:12px}.inbox-list .chat-row{padding:9px 12px}.inbox-list .chat-row:nth-of-type(n+5){display:none}.chat-detail{padding:0 10px 12px}.chat-detail-head{padding:11px 0}.chat-detail-head .outline-button{font-size:9px;padding:7px}.appointment-summary{padding:10px;margin:10px 0}.appointment-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.fact b{font-size:9px}.appointment-actions{gap:6px}.appointment-actions button{flex:1;font-size:9px;padding:8px 6px}.chat-thread{max-height:260px}.message{max-width:90%}.chat-quick-actions{flex-wrap:wrap}.chat-quick-actions .outline-button{font-size:9px}.settings-grid{grid-template-columns:1fr 1fr;gap:10px}.settings-grid label{font-size:9px}.settings-grid input,.settings-grid select{font-size:9px;padding:8px}.schedule-heading{align-items:flex-start;flex-direction:column}.schedule-heading .outline-button{white-space:normal;text-align:center}.day-card{padding:12px}.day-head{align-items:flex-start;flex-direction:column}.day-controls{width:100%;justify-content:space-between;flex-wrap:wrap}.day-controls select{width:100px}.block-grid{grid-template-columns:1fr 1fr;gap:9px}.block-grid .wide-field{grid-column:span 2}.block-grid label{font-size:9px}.doctor-chip{font-size:8px}.appointment-footer{position:sticky;bottom:72px;background:#f4f7fb;padding:8px 0;z-index:2}.appointment-footer button{flex:1;font-size:9px;padding:9px 5px}.preview-block{flex-direction:column}.settings-layout{grid-template-columns:1fr}.settings-menu{display:grid;grid-template-columns:1fr 1fr}.settings-menu button{padding:8px}.settings-menu small{font-size:8px}.settings-detail{padding:14px}.toolbar{align-items:flex-start}.toolbar h2{font-size:13px}.report-grid{grid-template-columns:1fr}.bar-chart{height:165px}.mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;inset:auto 0 0;background:#fff;border-top:1px solid #e5ebf2;padding:7px 3px calc(7px + env(safe-area-inset-bottom));z-index:10}.mobile-nav button{border:0;background:transparent;color:#8290a3;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:8px;padding:3px}.mobile-nav button.active{color:#2868c7;font-weight:700}.toast{left:12px;right:12px;bottom:78px;justify-content:center}}
+
+/* =========================================
+   HUPERA AI - READABILITY & ACCESSIBILITY
+========================================= */
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: 14px;
+}
+
+button {
+  min-height: 40px;
+}
+
+.side-link {
+  min-height: 46px;
+  font-size: 14px;
+}
+
+.page-heading p,
+.section-title p,
+.toolbar p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  font-size: 11px;
+}
+
+.metric-value {
+  font-size: 26px;
+}
+
+.metric-label {
+  font-size: 13px;
+}
+
+.metric-foot small,
+.agent-info small,
+.mini-booking-info small,
+.activity-text small {
+  font-size: 11px;
+}
+
+.outline-button,
+.danger-button,
+.primary-button {
+  min-height: 44px;
+  padding: 11px 16px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+
+.text-button {
+  min-height: 42px;
+  font-size: 13px;
+}
+
+.chat-copy b,
+.chat-person b,
+.profile b {
+  font-size: 14px;
+}
+
+.chat-copy p,
+.message,
+.fact b {
+  font-size: 13px;
+}
+
+.settings-grid label,
+.block-grid label,
+.settings-detail label {
+  font-size: 13px;
+}
+
+.settings-grid input,
+.settings-grid select,
+.block-grid input,
+.block-grid select,
+.settings-detail input {
+  min-height: 43px;
+  font-size: 13px;
+}
+
+.mobile-nav button {
+  min-height: 48px;
+  font-size: 10px;
+}
+
+:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 3px;
+}
+
+/* =========================================
+   DARK MODE
+   Activated by .dark-theme on app-shell
+========================================= */
+
+.app-shell.dark-theme {
+  background: #0b1220;
+  color: #e5edf8;
+}
+
+.dark-theme .main-area,
+.dark-theme .content {
+  background: #0b1220;
+}
+
+.dark-theme .topbar,
+.dark-theme .panel,
+.dark-theme .metric-card,
+.dark-theme .inbox-panel,
+.dark-theme .inbox-list,
+.dark-theme .chat-row,
+.dark-theme .settings-menu button,
+.dark-theme .settings-detail,
+.dark-theme .panel-inner {
+  background: #151f30;
+  border-color: #29374b;
+  color: #e5edf8;
+}
+
+.dark-theme .page-heading h1,
+.dark-theme .section-title h2,
+.dark-theme .toolbar h2,
+.dark-theme .metric-value,
+.dark-theme .metric-label,
+.dark-theme .agent-info b,
+.dark-theme .mini-booking-info b,
+.dark-theme .activity-text b,
+.dark-theme .chat-copy b,
+.dark-theme .chat-person b,
+.dark-theme .summary-heading h3,
+.dark-theme .chat-history-head h3,
+.dark-theme .day-title h3,
+.dark-theme .settings-detail h3,
+.dark-theme .profile b,
+.dark-theme .fact b {
+  color: #e5edf8;
+}
+
+.dark-theme .page-heading p,
+.dark-theme .muted-copy,
+.dark-theme .section-title p,
+.dark-theme .toolbar p,
+.dark-theme .chat-copy p,
+.dark-theme .chat-copy small,
+.dark-theme .fact small,
+.dark-theme .footer,
+.dark-theme .settings-detail p {
+  color: #a7b5c9;
+}
+
+.dark-theme .appointment-summary,
+.dark-theme .chat-thread,
+.dark-theme .empty-block,
+.dark-theme .integration-state {
+  background: #101a2b;
+  border-color: #29374b;
+  color: #e5edf8;
+}
+
+.dark-theme .message.received,
+.dark-theme .message.sent,
+.dark-theme .message.system-message {
+  background: #202e43;
+  border-color: #35445b;
+  color: #e5edf8;
+}
+
+.dark-theme .inbox-global-search,
+.dark-theme .search-field,
+.dark-theme .reply-box {
+  background: #151f30;
+  border-color: #35445b;
+  color: #e5edf8;
+}
+
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea {
+  background: #101a2b;
+  border-color: #35445b;
+  color: #e5edf8;
+}
+
+.dark-theme input::placeholder {
+  color: #91a1b8;
+}
+
+.dark-theme .chat-row:hover,
+.dark-theme .chat-row.chosen,
+.dark-theme .settings-menu button.active {
+  background: #203451;
+  color: #ffffff;
+}
+
+.dark-theme .outline-button {
+  background: #1b2a40;
+  border-color: #40516b;
+  color: #e5edf8;
+}
+
+.dark-theme .outline-button:hover {
+  background: #263a57;
+}
+
+.dark-theme .mobile-nav {
+  background: #151f30;
+  border-color: #29374b;
+}
+
+.dark-theme .mobile-nav button {
+  color: #a7b5c9;
+}
+
+.dark-theme .mobile-nav button.active {
+  color: #75adff;
+}
+
+.dark-theme .footer,
+.dark-theme .agent-row,
+.dark-theme .mini-booking,
+.dark-theme .activity-row,
+.dark-theme .summary-line,
+.dark-theme .schedule-block {
+  border-color: #29374b;
+}
+
+/* =========================================
+   MOBILE READABILITY
+========================================= */
+
+@media (max-width: 650px) {
+  body {
+    font-size: 14px;
+  }
+
+  .page-heading h1 {
+    font-size: 24px;
+  }
+
+  .page-heading p {
+    font-size: 13px;
+  }
+
+  .metric-value {
+    font-size: 23px;
+  }
+
+  .metric-label {
+    font-size: 12px;
+  }
+
+  .outline-button,
+  .primary-button,
+  .danger-button {
+    min-height: 44px;
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  .mobile-nav button {
+    font-size: 10px;
+    min-height: 48px;
+  }
+
+  .settings-grid input,
+  .settings-grid select,
+  .block-grid input,
+  .block-grid select {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
