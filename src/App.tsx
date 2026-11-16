@@ -109,9 +109,9 @@ function WorkspaceApp() {
   const refreshWorkspace=async()=>{
     setDataLoading(true);setDataError('');
     try{
-      const [dashboard,employees,appointments,inbox]=await Promise.all([
+      const [dashboard,employees,appointments,inbox,reports]=await Promise.all([
         getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
-        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox')
+        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:'30'})
       ]);
       const bookings=Array.isArray(appointments.appointments)?appointments.appointments:[];
       const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
@@ -131,7 +131,7 @@ function WorkspaceApp() {
           format:b.location||b.booking_type||'—',amount:Number(b.amount||b.total_amount||0),
           payment:b.payment_status||'—',upi:'',transactionId:b.transaction_reference||undefined,messages:[]};
       });
-      setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports:workspace.reports});
+      setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports});
       setChats(mapped);
       if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
@@ -222,16 +222,16 @@ function WorkspaceApp() {
             {tab==='Home'&&<button className="date-chip"><CalendarDays size={15}/> Today, Nov 15, 2026 <ChevronDown size={14}/></button>}
           </div>
 
-          <div className="demo-strip"><span className="demo-indicator"/><div><b>Preview workspace</b><span>Sample data only. Live WhatsApp, payment, email and calendar integrations are not connected.</span></div><span className="demo-tag">DEMO</span></div>
+          <div className="demo-strip"><span className="demo-indicator"/><div><b>{dataLoading?'Loading workspace':'Live workspace data'}</b><span>{dataError||'Showing information from your signed-in Hupera organization.'}</span></div><button className="outline-button" onClick={()=>void refreshWorkspace()} disabled={dataLoading}>Refresh</button></div>
 
           {tab==='Home'&&<>
             <div className="section-title"><h2>Today at a glance</h2><button onClick={()=>setTab('Reports')}>View reports <ArrowUpRight size={14}/></button></div>
             <div className="stats-grid">
-              <Metric icon={CalendarDays} label="Today's appointments" value="24" change="+12.5%" detail="vs. previous week"/>
-              <Metric icon={Clock3} label="Appointment pending" value="6" change="-8.2%" detail="vs. previous week" down/>
-              <Metric icon={CalendarCheck} label="Requested" value="9" change="+16.4%" detail="new requests this week"/>
-              <Metric icon={MessageCircle} label="Conversations" value="148" change="+21.8%" detail="vs. previous week"/>
-              <Metric icon={Wallet} label="Revenue collected" value="₹42,800" change="+9.6%" detail="vs. previous week"/>
+              <Metric icon={CalendarDays} label="Today's appointments" value={String(workspace.dashboard?.today_appointments?.length??0)} change="Live" detail="today"/>
+              <Metric icon={Clock3} label="Appointment pending" value={String(workspace.dashboard?.counts?.pending_appointments??0)} change="Live" detail="pending appointments"/>
+              <Metric icon={CalendarCheck} label="Requested" value={String(workspace.dashboard?.counts?.appointments??0)} change="Live" detail="total appointments"/>
+              <Metric icon={MessageCircle} label="Conversations" value={String(workspace.dashboard?.counts?.conversations??0)} change="Live" detail="conversations"/>
+              <Metric icon={Wallet} label="Revenue collected" value={workspace.reports?.currency?new Intl.NumberFormat('en-IN',{style:'currency',currency:workspace.reports.currency,maximumFractionDigits:0}).format(Number(workspace.reports.revenue||0)):String(workspace.reports?.revenue??'—')} change="Live" detail="reported revenue"/>
             </div>
             <div className="home-grid">
               <section className="panel">
@@ -242,7 +242,7 @@ function WorkspaceApp() {
               </section>
               <section className="panel">
                 <div className="section-title inside"><h2>Upcoming appointments</h2><button onClick={()=>setTab('Inbox')}>Open inbox <ChevronRight size={14}/></button></div>
-                {[['Priya Sharma','Cardiology · Dr. Arvind Mehta','10:30 AM'],['Aman Joshi','Orthopaedics · Dr. Roy','11:00 AM'],['Anya Pandey','Dermatology · Dr. Meera Nair','02:00 PM']].map(([n,d,t])=><div className="mini-booking" key={n}><span className="avatar violet">{n.split(' ').map(x=>x[0]).join('')}</span><span className="mini-booking-info"><b>{n}</b><small>{d}</small></span><b className="booking-time">{t}</b></div>)}
+                {(workspace.dashboard?.today_appointments||[]).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.dashboard?.today_appointments||[]).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
               </section>
             </div>
             <section className="panel activity-panel">
@@ -252,15 +252,15 @@ function WorkspaceApp() {
           </>}
 
           {tab==='Inbox'&&<>
-            <div className="inbox-global-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patients, appointments, UPI ID..."/><span className="calendar-sync"><CheckCircle2 size={14}/> Google Calendar Synced · demo</span></div>
+            <div className="inbox-global-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patients, appointments, UPI ID..."/><span className="calendar-sync"><CheckCircle2 size={14}/> Hupera workspace</span></div>
             <section className="inbox-panel">
               <aside className="inbox-list">
-                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live WhatsApp · Demo</small></div><SlidersHorizontal size={17}/></div>
+                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Workspace conversations</small></div><SlidersHorizontal size={17}/></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
                 {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen':'')} key={c.id} onClick={()=>setSelected(c.id)}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span></span>{c.status==='Payment Paid - Verify'&&<i className="unread-count">!</i>}</button>)}
               </aside>
               <section className="chat-detail">
-                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>WhatsApp conversation · {active.status}</small></span><button className="outline-button" onClick={()=>setHuman(!human)}>{human?'Return to AI':'Human takeover'}</button></div>
+                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>WhatsApp conversation · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});setHuman(!human);notify('Conversation mode updated.');}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Return to AI':'Human takeover'}</button></div>
                 <div className="appointment-summary">
                   <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
                   <div className="appointment-facts">
@@ -283,7 +283,7 @@ function WorkspaceApp() {
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent'}</span></div>
                 <div className="chat-thread">{active.messages.map((m,i)=><div key={i} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}>{m.from!=='customer'&&<small className="sender">{m.from==='ai'?'Hupera AI':m.from==='human'?'Fortis Admin':'System update'}</small>}{m.text}<small className="message-time">{m.time}</small></div></div>)}</div>
                 <div className="chat-quick-actions"><button className="outline-button" onClick={simulatePaid}><CreditCard size={14}/> Simulate “I Have Paid” (WhatsApp)</button><small>Demo event only</small></div>
-                <form className="reply-box" onSubmit={e=>{e.preventDefault();if(reply.trim()){addMsg(active.id,{from:human?'human':'ai',text:reply.trim(),time:'Now'});setReply('')}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message as AI Agent...'}/><button aria-label="Send message"><Send size={17}/></button></form>
+                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({from:m.sender_type==='customer'?'customer':m.sender_type==='human'?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
               </section>
             </section>
           </>}
