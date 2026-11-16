@@ -379,60 +379,136 @@ function SettingsPage({section,setSection,onLogout}:{section:string;setSection:(
 }
 
 
+
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
   const processingCode = useRef(false);
+  const callbackSucceeded = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+    let listener: { remove: () => Promise<void> } | null = null;
 
     const handleAppUrl = async (url: string) => {
       try {
         const callback = new URL(url);
 
-        if (callback.protocol !== 'hupera:' || callback.hostname !== 'auth') {
+        // Accept only Hupera's Android authentication callback.
+        if (
+          callback.protocol !== 'hupera:' ||
+          callback.hostname !== 'auth'
+        ) {
           return;
         }
 
         const code = callback.searchParams.get('code');
+        const callbackError = callback.searchParams.get('error');
+
+        if (callbackError) {
+          throw new Error(
+            callback.searchParams.get('error_description') ||
+            callbackError
+          );
+        }
 
         if (!code || processingCode.current) return;
 
         processingCode.current = true;
-        setLoading(true);
-        setError('');
 
+        if (mounted) {
+          setLoading(true);
+          setError('');
+        }
+
+        // Exchange the one-time login code for the app session.
         await exchangeMobileCode(code);
 
-        if (mounted) setAuthenticated(true);
+        callbackSucceeded.current = true;
 
-        await Browser.close().catch(() => {});
+        if (mounted) {
+          setAuthenticated(true);
+          setError('');
+        }
+
+        // Close the browser only after successful login.
+        try {
+          await Browser.close();
+        } catch {
+          // The browser may already have closed.
+        }
       } catch (err) {
         processingCode.current = false;
 
         if (mounted) {
+          setAuthenticated(false);
           setError(
-            err instanceof Error ? err.message : 'Mobile login failed.'
+            err instanceof Error
+              ? err.message
+              : 'Mobile login failed. Please try again.'
           );
         }
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    const listenerPromise = CapacitorApp.addListener(
-      'appUrlOpen',
-      ({ url }) => {
-        void handleAppUrl(url);
+    const initialize = async () => {
+      try {
+        // Register the callback listener before checking the launch URL.
+        listener = await CapacitorApp.addListener(
+          'appUrlOpen',
+          ({ url }) => {
+            void handleAppUrl(url);
+          }
+        );
+
+        // Handle the case where Android launches the app directly
+        // through hupera://auth?code=...
+        const launch = await CapacitorApp.getLaunchUrl();
+
+        if (launch?.url) {
+          await handleAppUrl(launch.url);
+        }
+
+        // Do not let an old token check overwrite a successful callback.
+        if (!callbackSucceeded.current && !processingCode.current) {
+          const token = await getToken();
+
+          if (
+            mounted &&
+            !callbackSucceeded.current &&
+            !processingCode.current
+          ) {
+            setAuthenticated(!!token);
+          }
+        }
+      } catch (err) {
+        if (mounted && !callbackSucceeded.current) {
+          setAuthenticated(false);
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Unable to check your login session.'
+          );
+        }
+      } finally {
+        if (mounted) {
+          setChecking(false);
+        }
       }
-    );
+    };
 
     const logout = async () => {
       await clearToken();
+
       processingCode.current = false;
+      callbackSucceeded.current = false;
 
       if (mounted) {
         setAuthenticated(false);
@@ -442,27 +518,15 @@ function App() {
 
     window.addEventListener('hupera-logout', logout);
 
-    getToken()
-      .then(token => {
-        if (mounted) setAuthenticated(!!token);
-      })
-      .catch(() => {
-        if (mounted) setAuthenticated(false);
-      })
-      .finally(() => {
-        if (mounted) setChecking(false);
-      });
-
-    CapacitorApp.getLaunchUrl().then(result => {
-      if (result?.url) {
-        void handleAppUrl(result.url);
-      }
-    }).catch(() => {});
+    void initialize();
 
     return () => {
       mounted = false;
       window.removeEventListener('hupera-logout', logout);
-      void listenerPromise.then(listener => listener.remove());
+
+      if (listener) {
+        void listener.remove();
+      }
     };
   }, []);
 
@@ -476,7 +540,9 @@ function App() {
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Unable to open secure login.'
+        err instanceof Error
+          ? err.message
+          : 'Unable to open secure login.'
       );
     } finally {
       setLoading(false);
