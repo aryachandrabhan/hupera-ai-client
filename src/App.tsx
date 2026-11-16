@@ -154,11 +154,7 @@ function WorkspaceApp() {
     return ()=>{cancelled=true;};
   },[active.conversationId]);
 
-  const paymentReceived=async()=>{
-    if(!active.bookingId){notify('No linked appointment is available to update.');return;}
-    try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'confirmed'});notify('Appointment confirmed in Hupera.');await refreshWorkspace();}
-    catch(e){notify(e instanceof Error?e.message:'Could not confirm appointment.');}
-  };
+  const paymentReceived=()=>notify('Payment verification is not exposed by the current Hupera mobile API. Verify the payment in the Hupera web workspace before confirming this booking.');
 
   const confirm=async()=>{
     if(!active.bookingId){notify('No linked appointment is available to confirm.');return;}
