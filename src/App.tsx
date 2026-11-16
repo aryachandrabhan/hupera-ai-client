@@ -18,12 +18,7 @@ type Chat = {id:string;conversationId:string;bookingId?:string;name:string;initi
 type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
-const initialChats:Chat[]=[
-{id:1,name:'Priya Sharma',initials:'PS',status:'Payment Paid - Verify',time:'10:42 AM',preview:'I have made the payment of ₹1,200...',department:'Cardiology',doctor:'Dr. Arvind Mehta',date:'Nov 18, 2026',day:'Wednesday',slot:'10:30 AM',format:'In-person visit',amount:1200,payment:'Pay Now',upi:'huperaclinic@okhdfcbank',transactionId:'UPI/82910394821',messages:[{from:'ai',text:'Hello Priya! Welcome to Hupera AI Clinic Assistant. How can I assist you with your appointment today?',time:'10:30 AM'},{from:'customer',text:'Hi, I would like to book an in-person consultation with Dr. Arvind Mehta for Cardiology.',time:'10:32 AM'},{from:'ai',text:'Certainly! We have a slot available on Nov 18, 2026 (Wednesday) at 10:30 AM. Would you like to Pay Now via UPI QR code or Pay at Venue?',time:'10:33 AM'},{from:'customer',text:"I'll Pay Now via UPI.",time:'10:35 AM'},{from:'ai',text:'Please scan the UPI QR code or pay to huperaclinic@okhdfcbank (Amount: ₹1,200). Once done, click I Have Paid.',time:'10:35 AM'},{from:'system',text:'UPI ID: huperaclinic@okhdfcbank · Amount: ₹1,200 · Scan via GPay, PhonePe or Paytm.',time:'10:35 AM'},{from:'customer',text:'I have made the payment of ₹1,200 successfully! Transaction ID: UPI/82910394821. [I Have Paid Clicked]',time:'10:42 AM'}]},
-{id:2,name:'Aman Joshi',initials:'AJ',status:'Confirmed & Synced',time:'Yesterday',preview:'Thanks Dr. Roy, appointment confirmed...',department:'Orthopaedics',doctor:'Dr. Roy',date:'Nov 17, 2026',day:'Tuesday',slot:'11:00 AM',format:'In-person visit',amount:900,payment:'Pay Now',upi:'huperaclinic@okhdfcbank',messages:[{from:'ai',text:'Hello Aman, your booking is confirmed for Nov 17 at 11:00 AM.',time:'Yesterday'},{from:'customer',text:'Thanks Dr. Roy, appointment confirmed. I received the details.',time:'Yesterday'},{from:'ai',text:'You are welcome! Your calendar invitation has been sent.',time:'Yesterday'}]},
-{id:3,name:'Anya Pandey',initials:'AP',status:'Pay at Venue',time:'Nov 14',preview:'Can I reschedule to Friday?',department:'Dermatology',doctor:'Dr. Meera Nair',date:'Nov 20, 2026',day:'Friday',slot:'02:00 PM',format:'In-person visit',amount:700,payment:'Pay at Venue',upi:'huperaclinic@okhdfcbank',messages:[{from:'customer',text:'Can I reschedule to Friday?',time:'Nov 14'},{from:'ai',text:'Of course. I can help you find an available Friday slot. Would 2:00 PM work?',time:'Nov 14'},{from:'customer',text:'Yes, that works. I will pay at the venue.',time:'Nov 14'}]},
-{id:4,name:'Rahul Verma',initials:'RV',status:'Confirmed & Synced',time:'Nov 12',preview:'Received my calendar invite. Thank you!',department:'General Medicine',doctor:'Dr. Arvind Mehta',date:'Nov 21, 2026',day:'Saturday',slot:'09:30 AM',format:'Phone / WhatsApp consultation',amount:500,payment:'Pay Now',upi:'huperaclinic@okhdfcbank',messages:[{from:'ai',text:'Hello Rahul, your booking is confirmed.',time:'Nov 12'},{from:'customer',text:'Received my calendar invite. Thank you!',time:'Nov 12'},{from:'ai',text:"You're welcome! Have a great day.",time:'Nov 12'}]}
-];
+const initialChats:Chat[]=[];
 
 const mk=(id:number,department:string,doctors:string[],from:string,to:string,fee=500):Block=>({id,department,doctors,from,to,fee});
 
@@ -107,8 +102,6 @@ function WorkspaceApp() {
   window.dispatchEvent(new Event('hupera-logout'));
 };
 
-  const patchChat=(id:string,p:Partial<Chat>)=>setChats(old=>old.map(c=>c.id===id?{...c,...p}:c));
-  const addMsg=(id:string,m:Msg)=>setChats(old=>old.map(c=>c.id===id?{...c,messages:[...c.messages,m],preview:m.text,time:m.time}:c));
 
   const refreshWorkspace=async()=>{
     setDataLoading(true);setDataError('');
