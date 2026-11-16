@@ -14,7 +14,7 @@ import './styles.css';
 
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {from:'customer'|'ai'|'human'|'system';text:string;time:string};
-type Chat = {id:string;conversationId:string;bookingId?:string;name:string;initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
+type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
 type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
@@ -80,7 +80,7 @@ function WorkspaceApp() {
     }
   });
 
-  const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
+  const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',phone:'',channel:'whatsapp',handlingMode:'AI',initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
 
   const notify=(s:string)=>{
@@ -114,11 +114,11 @@ function WorkspaceApp() {
       const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
       const mapped:Chat[]=conversations.map((c:any)=>{
         const b=c.latest_booking||bookings.find((x:any)=>x.conversation_id===c.id)||{};
-        const customerName=c.customer_name||b.customer_name||c.subject||'Customer';
+        const customerName=c.customer_name&&c.customer_name!=='Customer message'?c.customer_name:(b.customer_name||c.customer_phone||'Unknown customer');
         const stamp=b.starts_at?new Date(b.starts_at):null;
         const validDate=stamp&&!Number.isNaN(stamp.getTime())?stamp:null;
         return {id:String(c.id),conversationId:String(c.id),bookingId:b.id?String(b.id):undefined,
-          name:customerName,initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
+          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
           status:String(b.status||c.status||'Open').replace(/_/g,' '),
           time:c.last_message_at?new Date(c.last_message_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
           preview:c.last_message||c.subject||'No messages yet',department:b.service_name||b.title||'—',
@@ -143,7 +143,7 @@ function WorkspaceApp() {
     getHuperaResource<any>('thread',{conversation_id:active.conversationId}).then((data)=>{
       if(cancelled)return;
       const messages=(data.messages||[]).map((m:any)=>({
-        from:m.sender_type==='customer'?'customer':m.sender_type==='human'?'human':m.sender_type==='system'?'system':'ai',
+        from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
         text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
       } as Msg));
       setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));
@@ -186,7 +186,7 @@ function WorkspaceApp() {
         <div className="brand"><div className="brand-mark"><Bot size={22}/></div><div><b>Hupera <span>AI</span></b><small>CLIENT WORKSPACE</small></div></div>
         <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>{workspace.dashboard?.organization?.name||'Hupera Workspace'}</b><small>Business account</small></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
-        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('')}}><I size={17}/><span>{n}</span>{n==='Inbox'&&<i className="nav-count">1</i>}</button>)}
+        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('')}}><I size={17}/><span>{n}</span>{n==='Inbox'&&chats.length>0&&<i className="nav-count">{chats.length}</i>}</button>)}
         <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>All systems in demo mode</small></div>
       </aside>
 
@@ -253,7 +253,7 @@ function WorkspaceApp() {
                 {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen':'')} key={c.id} onClick={()=>setSelected(c.id)}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span></span>{c.status==='Payment Paid - Verify'&&<i className="unread-count">!</i>}</button>)}
               </aside>
               <section className="chat-detail">
-                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>WhatsApp conversation · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});setHuman(!human);notify('Conversation mode updated.');}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Return to AI':'Human takeover'}</button></div>
+                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});setHuman(!human);notify('Conversation mode updated.');}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Return to AI':'Human takeover'}</button></div>
                 <div className="appointment-summary">
                   <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
                   <div className="appointment-facts">
@@ -276,7 +276,7 @@ function WorkspaceApp() {
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent'}</span></div>
                 <div className="chat-thread">{active.messages.map((m,i)=><div key={i} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}>{m.from!=='customer'&&<small className="sender">{m.from==='ai'?'Hupera AI':m.from==='human'?'Fortis Admin':'System update'}</small>}{m.text}<small className="message-time">{m.time}</small></div></div>)}</div>
                 <div className="chat-quick-actions"><button className="outline-button" onClick={simulatePaid}><CreditCard size={14}/> Simulate “I Have Paid” (WhatsApp)</button><small>Demo event only</small></div>
-                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({from:m.sender_type==='customer'?'customer':m.sender_type==='human'?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
+                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
               </section>
             </section>
           </>}
