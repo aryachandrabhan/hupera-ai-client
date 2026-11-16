@@ -52,6 +52,7 @@ function WorkspaceApp() {
   const [tab,setTab]=useState<Tab>('Home');
   const [chats,setChats]=useState<Chat[]>(initialChats);
   const [selected,setSelected]=useState('');
+  const [mobileChatOpen,setMobileChatOpen]=useState(false);
   const [workspace,setWorkspace]=useState<any>({dashboard:null,employees:[],appointments:[],reports:null});
   const [dataLoading,setDataLoading]=useState(true);
   const [dataError,setDataError]=useState('');
@@ -112,7 +113,7 @@ function WorkspaceApp() {
     try{
       const [dashboard,employees,appointments,inbox,reports]=await Promise.all([
         getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
-        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:'30'})
+        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:period.replace(' days','')})
       ]);
       const bookings=Array.isArray(appointments.appointments)?appointments.appointments:[];
       const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
@@ -259,14 +260,14 @@ function WorkspaceApp() {
 
           {tab==='Inbox'&&<>
             <div className="inbox-global-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patients, appointments, UPI ID..."/><span className="calendar-sync"><CheckCircle2 size={14}/> Hupera workspace</span></div>
-            <section className="inbox-panel">
+            <section className={'inbox-panel '+(mobileChatOpen?'mobile-chat-open':'')}>
               <aside className="inbox-list">
                 <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · auto-refresh every 5 seconds</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
-                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>setSelected(c.id)}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}
+                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}
               </aside>
               <section className="chat-detail">
-                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI Agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Resume AI Agent':'Take Over Chat from AI Agent'}</button></div>
+                <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI Agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Resume AI Agent':'Take Over Chat from AI Agent'}</button></div>
                 <div className="appointment-summary">
                   <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
                   <div className="appointment-facts">
@@ -296,7 +297,7 @@ function WorkspaceApp() {
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout}/>}
+          {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} dashboard={workspace.dashboard} employees={workspace.employees}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
@@ -384,48 +385,72 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
 }
 
 function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
+  const currency = reports?.currency || 'INR';
+  const money = (value:any) => new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(Number(value||0));
+  const exportReport = () => {
+    if (!reports) return;
+    const rows = [
+      ['Metric','Value'],
+      ['Period',period],
+      ['Appointments',reports.appointments ?? 0],
+      ['Customers',reports.customers ?? 0],
+      ['Revenue',reports.revenue ?? 0],
+      ['Currency',currency],
+      ['Conversations',reports.conversations ?? 0],
+      ['AI responses',reports.ai_responses ?? 0]
+    ];
+    const csv = rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+    const url = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    const link = document.createElement('a'); link.href=url; link.download='hupera-report-'+period.replace(/\\s+/g,'-')+'.csv'; link.click(); URL.revokeObjectURL(url);
+  };
   return <section className="panel module-panel">
-    <div className="toolbar"><div><h2>Performance overview</h2><p>Business performance and trends for the selected period.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
-    <div className="stats-grid report-metrics">
-      <Metric icon={CalendarCheck} label="Appointments" value={String(reports?.appointments??0)} change="Live" detail={period}/>
-      <Metric icon={Users} label="Customers" value={String(reports?.customers??0)} change="Live" detail={period}/>
-      <Metric icon={Wallet} label="Revenue" value={reports?.currency?new Intl.NumberFormat('en-IN',{style:'currency',currency:reports.currency,maximumFractionDigits:0}).format(Number(reports?.revenue||0)):String(reports?.revenue??0)} change="Live" detail={period}/>
-      <Metric icon={MessageCircle} label="Conversations" value={String(reports?.conversations??0)} change="Live" detail={period}/>
-      <Metric icon={Activity} label="AI responses" value={String(reports?.ai_responses??0)} change="Live" detail="recorded responses"/>
-    </div>
-    <div className="report-grid">
-      <div className="panel-inner"><div className="section-title inside"><div><h3>Weekly activity</h3><p>Activity from your Hupera workspace</p></div><button className="outline-button" onClick={()=>window.alert('Report export will be available after backend connection.')}><Download size={14}/> Export</button></div><div className="bar-chart">{[42,56,49,68,62,86,74].map((v,i)=><div className="bar-column" key={i}><div className="bar-track"><span style={{height:v+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div><div className="chart-legend"><i/> Appointment activity</div></div>
-      <div className="panel-inner"><h3>Performance summary</h3>{[['Appointment completion','91%','+4.1%'],['No-show rate','4.8%','-1.3%'],['Payment collection','₹2.48L','+11.6%'],['Average response time','38 sec','-12 sec']].map(([a,b,c])=><div className="summary-line" key={a}><div><small>{a}</small><b>{b}</b></div><span className="positive"><TrendingUp size={13}/>{c}</span></div>)}</div>
-    </div>
+    <div className="toolbar"><div><h2>Performance overview</h2><p>Verified totals returned by your Hupera workspace.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
+    {!reports ? <div className="empty-block">Report data is not available yet. Check your connection and refresh.</div> : <>
+      <div className="stats-grid report-metrics">
+        <Metric icon={CalendarCheck} label="Appointments" value={String(reports.appointments??0)} change="Workspace" detail={period}/>
+        <Metric icon={Users} label="Customers" value={String(reports.customers??0)} change="Workspace" detail={period}/>
+        <Metric icon={Wallet} label="Revenue" value={money(reports.revenue)} change="Workspace" detail={period}/>
+        <Metric icon={MessageCircle} label="Conversations" value={String(reports.conversations??0)} change="Workspace" detail={period}/>
+        <Metric icon={Activity} label="AI responses" value={String(reports.ai_responses??0)} change="Workspace" detail={period}/>
+      </div>
+      <div className="panel-inner report-data-panel">
+        <div className="section-title inside"><div><h3>Report data</h3><p>Only values returned by the live reports API are shown.</p></div><button className="outline-button" onClick={exportReport}><Download size={14}/> Export CSV</button></div>
+        <div className="summary-line"><div><small>Selected reporting period</small><b>{period}</b></div></div>
+        <div className="summary-line"><div><small>Total appointments</small><b>{reports.appointments??0}</b></div></div>
+        <div className="summary-line"><div><small>Total customers</small><b>{reports.customers??0}</b></div></div>
+        <div className="summary-line"><div><small>Revenue collected</small><b>{money(reports.revenue)}</b></div></div>
+        <div className="summary-line"><div><small>Conversations</small><b>{reports.conversations??0}</b></div></div>
+        <div className="summary-line"><div><small>AI responses</small><b>{reports.ai_responses??0}</b></div></div>
+      </div>
+    </>}
   </section>;
 }
 
-function SettingsPage({section,setSection,onLogout}:{section:string;setSection:(s:string)=>void;onLogout:()=>void}) {
-  const items=[['Business profile','Hospital name, address and contact'],['WhatsApp integration','Connect and manage WhatsApp'],['AI Workforce','Agents, instructions and handover'],['Payments','UPI details and payment workflow'],['Team & permissions','Staff access and roles'],['Notifications','Email and WhatsApp alerts'],['Google Calendar','Calendar connection and sync'],['Billing & support','Subscription and help centre']];
-
+function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlerts,dashboard,employees}:{section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;dashboard:any;employees:any[]}) {
+  const items=[['Business profile','Organization information'],['WhatsApp integration','Channel connection status'],['AI Workforce','Your active AI employees'],['Payments','Payment setup and verification'],['Team & permissions','Workspace access'],['Notifications','Device notification preferences'],['Appearance','Light and dark theme'],['Google Calendar','Calendar connection status'],['Billing & support','Subscription and help']];
+  const org=dashboard?.organization||{};
+  const openWorkspace=()=>{window.open('https://hupera-ai.hatchable.site','_blank','noopener,noreferrer');};
   return <section className="panel module-panel">
-    <div className="toolbar"><div><h2>Workspace settings</h2><p>Configure your hospital account and integrations.</p></div></div>
+    <div className="toolbar"><div><h2>Workspace settings</h2><p>Choose a setting to view its current state and available action.</p></div></div>
     <div className="settings-layout">
-      <div className="settings-menu">{items.map(([a,b])=><button className={section===a?'active':''} key={a} onClick={()=>setSection(a)}><span><b>{a}</b><small>{b}</small></span><ChevronRight size={15}/></button>)}</div>
+      <div className="settings-menu">{items.map(([a,b])=><button type="button" className={section===a?'active':''} key={a} onClick={()=>setSection(a)}><span><b>{a}</b><small>{b}</small></span><ChevronRight size={15}/></button>)}</div>
       <div className="settings-detail">
         <div className="settings-detail-icon"><Settings size={20}/></div>
         <h3>{section}</h3>
-        <p>Manage {section.toLowerCase()} for Fortis Hospital. These are preview controls until live provider accounts and backend services are connected.</p>
-        {section==='Business profile'&&<><label>Business name<input value="Fortis Hospital" readOnly/></label><label>Timezone<input value="Asia/Kolkata" readOnly/></label></>}
-        {section==='Payments'&&<><label>UPI ID<input value="huperaclinic@okhdfcbank" readOnly/></label><label>Verification method<input value="Manual verification by hospital admin" readOnly/></label></>}
-        {section==='Google Calendar'&&<div className="integration-state"><CalendarCheck/><div><b>Google Calendar not connected</b><small>Authorize a Google account to enable live calendar sync.</small></div></div>}
-        <button className="outline-button" onClick={()=>window.alert('This setting needs backend integration.')}>Configure {section}</button>
-        <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}>
-          <h3 style={{marginTop:0}}>Account</h3>
-          <p>Logout requires a connected login and authentication service. This preview currently does not contain that connection.</p>
-          <button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button>
-        </div>
+        {section==='Business profile'&&<><p>Organization details currently returned by your signed-in workspace.</p><div className="summary-line"><div><small>Business name</small><b>{org.name||'Not provided by workspace'}</b></div></div><div className="summary-line"><div><small>Organization ID</small><b>{org.id||'Not available'}</b></div></div><button className="outline-button" onClick={openWorkspace}>Open Hupera workspace</button></>}
+        {section==='WhatsApp integration'&&<><p>Manage the WhatsApp Business connection and webhook configuration in your Hupera workspace.</p><div className="integration-state"><MessageCircle/><div><b>Connection details are managed by the workspace</b><small>This mobile client does not expose Meta credentials or connection secrets.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open channel settings</button></>}
+        {section==='AI Workforce'&&<><p>AI employees available to this organization.</p>{employees.length?employees.map((employee:any,i:number)=><div className="summary-line" key={employee.id||employee.name||i}><div><small>AI employee</small><b>{employee.name||employee.title||employee.role||'AI employee'}</b></div><span>{employee.status||'Configured'}</span></div>):<div className="empty-block">No AI employee records were returned by the workspace.</div>}<button className="outline-button" onClick={openWorkspace}>Manage AI workforce</button></>}
+        {section==='Payments'&&<><p>Payment provider credentials and settlement settings are protected and managed in the web workspace.</p><div className="integration-state"><Wallet/><div><b>Provider configuration</b><small>Open the workspace to review Cashfree and payment settings.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open payment settings</button></>}
+        {section==='Team & permissions'&&<><p>Team membership and role changes are managed by workspace administrators.</p><button className="outline-button" onClick={openWorkspace}>Manage team access</button></>}
+        {section==='Notifications'&&<><p>Allow this device to show inbox notifications while Hupera is running.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> Enable device alerts</button><div className="summary-line"><div><small>Browser / device permission</small><b>{typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b></div></div><small>Background push notifications require Firebase Cloud Messaging setup and are not enabled by this setting.</small></>}
+        {section==='Appearance'&&<><p>Change the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button></>}
+        {section==='Google Calendar'&&<><p>Calendar authorization and synchronization are managed in the web workspace.</p><div className="integration-state"><CalendarCheck/><div><b>Connection status not exposed to mobile app</b><small>Open the workspace to connect or inspect Google Calendar.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open calendar settings</button></>}
+        {section==='Billing & support'&&<><p>View subscription, invoices, plan limits and support options in Hupera.</p><button className="outline-button" onClick={openWorkspace}>Open billing & support</button></>}
+        <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}><h3 style={{marginTop:0}}>Account</h3><p>Sign out of this Hupera mobile session.</p><button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button></div>
       </div>
     </div>
   </section>;
 }
-
-
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
