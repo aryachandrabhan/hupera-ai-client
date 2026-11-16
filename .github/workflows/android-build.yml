@@ -1,101 +1,43 @@
 
-name: Build Hupera Android APK
-
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: read
-
-jobs:
-  build-android:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build web application
-        run: npm run build
-
-      - name: Sync Capacitor Android
-        run: npx cap sync android
-
-      - name: Validate Android Manifest XML
+      - name: Verify source Android Manifest
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
 
           path = "android/app/src/main/AndroidManifest.xml"
+          root = ET.parse(path).getroot()
 
-          try:
-              ET.parse(path)
-              print("SUCCESS: Manifest XML syntax is valid.")
-          except ET.ParseError as error:
-              print(f"MANIFEST XML ERROR: {error}")
-              raise
+          ns = "{http://schemas.android.com/apk/res/android}"
+
+          app = root.find("application")
+          assert app is not None, "Application tag missing"
+
+          activity = app.find("activity")
+          assert activity is not None, "Activity missing"
+
+          assert activity.get(ns + "name") == ".MainActivity", "MainActivity missing"
+
+          filters = activity.findall("intent-filter")
+
+          launcher_ok = any(
+              any(x.tag == "action" and x.get(ns + "name") == "android.intent.action.MAIN" for x in f)
+              and any(x.tag == "category" and x.get(ns + "name") == "android.intent.category.LAUNCHER" for x in f)
+              for f in filters
+          )
+
+          deep_link_ok = any(
+              any(x.tag == "action" and x.get(ns + "name") == "android.intent.action.VIEW" for x in f)
+              and any(
+                  x.tag == "data"
+                  and x.get(ns + "scheme") == "hupera"
+                  and x.get(ns + "host") == "auth"
+                  for x in f
+              )
+              for f in filters
+          )
+
+          assert launcher_ok, "Launcher configuration missing"
+          assert deep_link_ok, "Hupera auth deep link missing"
+
+          print("SUCCESS: Launcher and Hupera deep link configuration verified.")
           PY
-
-      - name: Verify source Android Manifest
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          test -f "$MANIFEST"
-          grep -q 'android:name=".MainActivity"' "$MANIFEST"
-          grep -q 'android:name="android.intent.action.MAIN"' "$MANIFEST"
-          grep -q 'android:name="android.intent.action.LAUNCHER"' "$MANIFEST"
-          grep -q 'android:scheme="hupera"' "$MANIFEST"
-          grep -q 'android:host="auth"' "$MANIFEST"
-
-          echo "SUCCESS: Launcher and Hupera deep link configuration verified."
-
-      - name: Build Debug APK
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:processDebugMainManifest --stacktrace --info
-          ./gradlew assembleDebug --stacktrace
-
-      - name: Verify deep link inside APK
-        run: |
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
-          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          AAPT="$(find "$SDK/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-
-          test -f "$APK"
-          test -n "$AAPT"
-
-          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > manifest-check.txt
-
-          if grep -q 'hupera' manifest-check.txt && grep -q 'auth' manifest-check.txt; then
-            echo "SUCCESS: Hupera deep link found inside APK."
-          else
-            echo "ERROR: Deep link missing from APK."
-            cat manifest-check.txt
-            exit 1
-          fi
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Hupera-Android-Debug-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
