@@ -7,7 +7,7 @@ import {
   Activity, ArrowUpRight, Bell, Bot, CalendarCheck, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
   Download, Home, MapPin, MessageCircle, Plus, Search, Send, Settings,
-  ShieldCheck, SlidersHorizontal, Stethoscope, TrendingDown, TrendingUp,
+  ShieldCheck, Stethoscope, TrendingDown, TrendingUp,
   UserRound, Wallet, X, RefreshCw, Users, FileText, Sun, Moon, LogOut
 } from 'lucide-react';
 import './styles.css';
