@@ -21,6 +21,7 @@ async function request<T extends ApiResponse>(
   if (authenticated) {
     const token = await getToken();
     if (!token) throw new Error('Please sign in again.');
+
     headers.set('Authorization', `Bearer ${token}`);
   }
 
@@ -55,16 +56,13 @@ export async function sendOtp(email: string) {
     expiresInSeconds: number;
     resendAfterSeconds: number;
     error?: string;
-  }>(
-    `${API_BASE}/hupera-mobile-auth`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'send',
-        email: email.trim().toLowerCase()
-      })
-    }
-  );
+  }>(`${API_BASE}/hupera-mobile-auth`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'send',
+      email: email.trim().toLowerCase()
+    })
+  });
 }
 
 export async function verifyOtp(
@@ -78,18 +76,15 @@ export async function verifyOtp(
     email: string;
     expiresIn: number;
     error?: string;
-  }>(
-    `${API_BASE}/hupera-mobile-auth`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'verify',
-        email: email.trim().toLowerCase(),
-        challengeId,
-        otp: otp.trim()
-      })
-    }
-  );
+  }>(`${API_BASE}/hupera-mobile-auth`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'verify',
+      email: email.trim().toLowerCase(),
+      challengeId,
+      otp: otp.trim()
+    })
+  });
 
   if (!result.accessToken) {
     throw new Error('Sign-in did not return a valid session.');
@@ -106,8 +101,9 @@ export async function verifyOtp(
 export async function getHuperaResource<T extends ApiResponse>(
   resource: string,
   params: Record<string, string> = {}
-) {
+): Promise<T> {
   const query = new URLSearchParams({ resource, ...params });
+
   return request<T>(
     `${API_BASE}/upriai-bridge?${query.toString()}`,
     {},
@@ -118,7 +114,7 @@ export async function getHuperaResource<T extends ApiResponse>(
 export async function postHuperaAction<T extends ApiResponse>(
   action: string,
   payload: Record<string, unknown> = {}
-) {
+): Promise<T> {
   return request<T>(
     `${API_BASE}/upriai-bridge`,
     {
@@ -127,4 +123,25 @@ export async function postHuperaAction<T extends ApiResponse>(
     },
     true
   );
+}
+export async function exchangeMobileCode(code: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/hupera-mobile-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+
+  const data = await response.json().catch(() => ({})) as {
+    accessToken?: string;
+    error?: string;
+  };
+
+  if (!response.ok || !data.accessToken) {
+    throw new Error(data.error || 'Mobile login failed');
+  }
+
+  await Preferences.set({
+    key: TOKEN_KEY,
+    value: data.accessToken,
+  });
 }
