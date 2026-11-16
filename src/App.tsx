@@ -14,7 +14,7 @@ import './styles.css';
 
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {from:'customer'|'ai'|'human'|'system';text:string;time:string};
-type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
+type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;needsAction:boolean;priorityType?:string;unreadCount:number;appointments:any[];payments:any[];initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
 type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
@@ -57,7 +57,9 @@ function WorkspaceApp() {
   const [dataError,setDataError]=useState('');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
-  const [human,setHuman]=useState(false);
+  const [alertsEnabled,setAlertsEnabled]=useState(false);
+  const priorityInitialized=useRef(false);
+  const previousPriorityIds=useRef<Set<string>>(new Set());
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
   const [slot,setSlot]=useState('30');
@@ -80,7 +82,8 @@ function WorkspaceApp() {
     }
   });
 
-  const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',phone:'',channel:'whatsapp',handlingMode:'AI',initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
+  const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',phone:'',channel:'whatsapp',handlingMode:'AI',needsAction:false,priorityType:undefined,unreadCount:0,appointments:[],payments:[],initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
+  const human=String(active.handlingMode||'AI').toLowerCase()==='human';
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
 
   const notify=(s:string)=>{
@@ -118,7 +121,7 @@ function WorkspaceApp() {
         const stamp=b.starts_at?new Date(b.starts_at):null;
         const validDate=stamp&&!Number.isNaN(stamp.getTime())?stamp:null;
         return {id:String(c.id),conversationId:String(c.id),bookingId:b.id?String(b.id):undefined,
-          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
+          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),needsAction:c.needs_action===true,priorityType:c.priority_type?String(c.priority_type):undefined,unreadCount:Number(c.unread_count||0),appointments:[],payments:[],initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
           status:String(b.status||c.status||'Open').replace(/_/g,' '),
           time:c.last_message_at?new Date(c.last_message_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
           preview:c.last_message||c.subject||'No messages yet',department:b.service_name||b.title||'—',
@@ -130,12 +133,17 @@ function WorkspaceApp() {
       });
       setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports});
       setChats(mapped);
+      const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
+      if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id))new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});}}
+      previousPriorityIds.current=urgent;priorityInitialized.current=true;
       if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
     finally{setDataLoading(false);}
   };
 
   useEffect(()=>{void refreshWorkspace();},[]);
+
+  useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab]);
 
   useEffect(()=>{
     if(!active.conversationId)return;
@@ -146,12 +154,14 @@ function WorkspaceApp() {
         from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
         text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
       } as Msg));
-      setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));
+      setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
     }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
     return ()=>{cancelled=true;};
   },[active.conversationId]);
 
-  const paymentReceived=()=>notify('Payment verification is not exposed by the current Hupera mobile API. Verify the payment in the Hupera web workspace before confirming this booking.');
+  const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');notify(permission==='granted'?'Inbox notifications enabled.':'Notification permission was not granted.');};
+
+  const paymentReceived=()=>notify('Payment verification must be confirmed by the connected payment provider webhook.');
 
   const confirm=async()=>{
     if(!active.bookingId){notify('No linked appointment is available to confirm.');return;}
@@ -248,12 +258,12 @@ function WorkspaceApp() {
             <div className="inbox-global-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patients, appointments, UPI ID..."/><span className="calendar-sync"><CheckCircle2 size={14}/> Hupera workspace</span></div>
             <section className="inbox-panel">
               <aside className="inbox-list">
-                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Workspace conversations</small></div><SlidersHorizontal size={17}/></div>
+                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · auto-refresh every 5 seconds</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
-                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen':'')} key={c.id} onClick={()=>setSelected(c.id)}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span></span>{c.status==='Payment Paid - Verify'&&<i className="unread-count">!</i>}</button>)}
+                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>setSelected(c.id)}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}
               </aside>
               <section className="chat-detail">
-                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});setHuman(!human);notify('Conversation mode updated.');}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Return to AI':'Human takeover'}</button></div>
+                <div className="chat-detail-head"><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI Agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Resume AI Agent':'Take Over Chat from AI Agent'}</button></div>
                 <div className="appointment-summary">
                   <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
                   <div className="appointment-facts">
@@ -274,8 +284,8 @@ function WorkspaceApp() {
                   </div>
                 </div>
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent'}</span></div>
-                <div className="chat-thread">{active.messages.map((m,i)=><div key={i} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}>{m.from!=='customer'&&<small className="sender">{m.from==='ai'?'Hupera AI':m.from==='human'?'Fortis Admin':'System update'}</small>}{m.text}<small className="message-time">{m.time}</small></div></div>)}</div>
-                <div className="chat-quick-actions"><button className="outline-button" onClick={simulatePaid}><CreditCard size={14}/> Simulate “I Have Paid” (WhatsApp)</button><small>Demo event only</small></div>
+                <div className="chat-thread">{(active.appointments||[]).map((b:any)=><div className="appointment-request" key={'appointment-'+b.id}><div className="request-heading"><CalendarCheck size={17}/><b>Appointment {String(b.status||'requested').replace(/_/g,' ')}</b></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div></div>)}{(active.payments||[]).map((p:any)=><div className="appointment-request payment-request-card" key={'payment-'+p.id}><div className="request-heading"><CreditCard size={17}/><b>Payment {String(p.status||'pending').replace(/_/g,' ')}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:p.currency||'INR'}).format(Number(p.amount||0))}</b></div><div className="request-details"><span>Payment type</span><b>{p.payment_kind||'Appointment payment'}</b></div><div className="request-details"><span>Provider</span><b>{p.provider||'—'}</b></div>{p.payment_link_url&&<p><a href={p.payment_link_url} target="_blank" rel="noreferrer">Open payment link</a></p>}</div>)}{(active.appointments||[]).filter((b:any)=>b.payment_confirmation_requested_at||String(b.payment_status||'').toLowerCase()==='pending').map((b:any)=><div className="appointment-request payment-request-card" key={'payment-request-'+b.id}><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation requested</b></div><div className="request-details"><span>Booking</span><b>{b.reference_code||b.title||'Appointment'}</b></div><div className="request-details"><span>Payment status</span><b>{b.payment_status||'Pending verification'}</b></div><div className="request-details"><span>Reference / UTR</span><b>{b.payment_reference||'Not supplied'}</b></div></div>)}{active.messages.map((m,i)=><div key={i} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}>{m.from!=='customer'&&<small className="sender">{m.from==='ai'?'Hupera AI':m.from==='human'?'Team member':'System update'}</small>}{m.text}<small className="message-time">{m.time}</small></div></div>)}</div>
+                <div className="chat-quick-actions"><small>Messages are sent through the connected channel. AI automation is {human?'paused for this chat':'active for this chat'}.</small></div>
                 <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
               </section>
             </section>
