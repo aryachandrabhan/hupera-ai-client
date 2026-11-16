@@ -1,6 +1,8 @@
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { clearToken, getToken, sendOtp, verifyOtp } from './huperaApi';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { clearToken, getToken, exchangeMobileCode } from './huperaApi';
 import {
   Activity, ArrowUpRight, Bell, Bot, CalendarCheck, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
@@ -376,18 +378,69 @@ function SettingsPage({section,setSection,onLogout}:{section:string;setSection:(
   </section>;
 }
 
+
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [challengeId, setChallengeId] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const processingCode = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+
+    const handleAppUrl = async (url: string) => {
+      try {
+        const callback = new URL(url);
+
+        if (callback.protocol !== 'hupera:' || callback.hostname !== 'auth') {
+          return;
+        }
+
+        const code = callback.searchParams.get('code');
+
+        if (!code || processingCode.current) return;
+
+        processingCode.current = true;
+        setLoading(true);
+        setError('');
+
+        await exchangeMobileCode(code);
+
+        if (mounted) setAuthenticated(true);
+
+        await Browser.close().catch(() => {});
+      } catch (err) {
+        processingCode.current = false;
+
+        if (mounted) {
+          setError(
+            err instanceof Error ? err.message : 'Mobile login failed.'
+          );
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    const listenerPromise = CapacitorApp.addListener(
+      'appUrlOpen',
+      ({ url }) => {
+        void handleAppUrl(url);
+      }
+    );
+
+    const logout = async () => {
+      await clearToken();
+      processingCode.current = false;
+
+      if (mounted) {
+        setAuthenticated(false);
+        setError('');
+      }
+    };
+
+    window.addEventListener('hupera-logout', logout);
 
     getToken()
       .then(token => {
@@ -400,62 +453,31 @@ function App() {
         if (mounted) setChecking(false);
       });
 
-    const logout = async () => {
-      await clearToken();
-      setAuthenticated(false);
-      setOtpSent(false);
-      setOtp('');
-      setChallengeId('');
-    };
-
-    window.addEventListener('hupera-logout', logout);
+    CapacitorApp.getLaunchUrl().then(result => {
+      if (result?.url) {
+        void handleAppUrl(result.url);
+      }
+    }).catch(() => {});
 
     return () => {
       mounted = false;
       window.removeEventListener('hupera-logout', logout);
+      void listenerPromise.then(listener => listener.remove());
     };
   }, []);
 
-  const handleSendOtp = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     setError('');
-
-    if (!email.trim()) {
-      setError('Please enter your registered email address.');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      const result = await sendOtp(email);
-
-      setChallengeId(result.challengeId);
-      setOtpSent(true);
+      await Browser.open({
+        url: 'https://hupera-ai.hatchable.site/api/hupera-mobile-sso'
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to send OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (otp.trim().length !== 6) {
-      setError('Please enter the 6-digit verification code.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await verifyOtp(email, challengeId, otp);
-      setAuthenticated(true);
-      setOtp('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'OTP verification failed.');
+      setError(
+        err instanceof Error ? err.message : 'Unable to open secure login.'
+      );
     } finally {
       setLoading(false);
     }
@@ -523,134 +545,32 @@ function App() {
           </p>
         </div>
 
-        {!otpSent ? (
-          <form onSubmit={handleSendOtp}>
-            <h2 style={{ fontSize: 20 }}>Welcome back</h2>
+        <h2 style={{ fontSize: 20 }}>Welcome back</h2>
 
-            <p style={{ color: '#aab8cb', lineHeight: 1.5 }}>
-              Enter your registered Hupera AI account email.
-              We will send you a verification code.
-            </p>
+        <p style={{ color: '#aab8cb', lineHeight: 1.5 }}>
+          Sign in securely using your registered Hupera AI account.
+          Your website login will open for verification.
+        </p>
 
-            <label style={{ display: 'block', marginBottom: 8 }}>
-              Email address
-            </label>
-
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Enter your email address"
-              required
-              autoComplete="email"
-              style={{
-                width: '100%',
-                padding: 14,
-                borderRadius: 9,
-                border: '1px solid #52627a',
-                background: '#101827',
-                color: '#fff',
-                boxSizing: 'border-box',
-                fontSize: 15,
-                marginBottom: 18
-              }}
-            />
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: 14,
-                border: 0,
-                borderRadius: 9,
-                background: '#315be8',
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: 'pointer',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              {loading ? 'Sending...' : 'Send Verification Code'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp}>
-            <h2 style={{ fontSize: 20 }}>Verify your email</h2>
-
-            <p style={{ color: '#aab8cb', lineHeight: 1.5 }}>
-              Enter the 6-digit verification code sent to:
-              <br />
-              <strong style={{ color: '#fff' }}>{email}</strong>
-            </p>
-
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="Enter 6-digit OTP"
-              required
-              autoComplete="one-time-code"
-              style={{
-                width: '100%',
-                padding: 14,
-                borderRadius: 9,
-                border: '1px solid #52627a',
-                background: '#101827',
-                color: '#fff',
-                boxSizing: 'border-box',
-                fontSize: 20,
-                letterSpacing: 8,
-                textAlign: 'center',
-                margin: '12px 0 18px'
-              }}
-            />
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: 14,
-                border: 0,
-                borderRadius: 9,
-                background: '#315be8',
-                color: '#fff',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: 'pointer',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              {loading ? 'Verifying...' : 'Verify & Sign In'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setOtpSent(false);
-                setOtp('');
-                setChallengeId('');
-                setError('');
-              }}
-              style={{
-                width: '100%',
-                padding: 12,
-                marginTop: 10,
-                border: '1px solid #52627a',
-                borderRadius: 9,
-                background: 'transparent',
-                color: '#fff',
-                cursor: 'pointer'
-              }}
-            >
-              Change email address
-            </button>
-          </form>
-        )}
+        <button
+          type="button"
+          onClick={handleLogin}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: 14,
+            border: 0,
+            borderRadius: 9,
+            background: '#315be8',
+            color: '#fff',
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: 'pointer',
+            opacity: loading ? 0.6 : 1
+          }}
+        >
+          {loading ? 'Opening secure login...' : 'Sign in with Hupera AI'}
+        </button>
 
         {error && (
           <p style={{
