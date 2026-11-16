@@ -209,7 +209,7 @@ function WorkspaceApp() {
         <div className="brand"><div className="brand-mark"><Bot size={22}/></div><div><b>Hupera <span>AI</span></b><small>CLIENT WORKSPACE</small></div></div>
         <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>{workspace.dashboard?.organization?.name||'Hupera Workspace'}</b><small>Business account</small></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
-        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('')}}><I size={17}/><span>{n}</span>{n==='Inbox'&&chats.length>0&&<i className="nav-count">{chats.length}</i>}</button>)}
+        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('');setMobileChatOpen(false);}}><I size={17}/><span>{n}</span>{n==='Inbox'&&chats.length>0&&<i className="nav-count">{chats.length}</i>}</button>)}
         <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>Live inbox · backend connected</small></div>
       </aside>
 
@@ -273,7 +273,7 @@ function WorkspaceApp() {
               <aside className="inbox-list">
                 <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · auto-refresh every 5 seconds</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
-                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}
+                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}
               </aside>
               <section className="chat-detail">
                 <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI Agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Resume AI Agent':'Take Over Chat from AI Agent'}</button></div>
@@ -312,7 +312,7 @@ function WorkspaceApp() {
         </main>
       </div>
 
-      <nav className="mobile-nav">{nav.map(([n,I])=><button key={n} className={tab===n?'active':''} onClick={()=>setTab(n)}><I size={19}/><span>{n}</span></button>)}</nav>
+      <nav className="mobile-nav">{nav.map(([n,I])=><button key={n} className={tab===n?'active':''} onClick={()=>{setTab(n);setMobileChatOpen(false);}}><I size={19}/><span>{n}</span></button>)}</nav>
       {toast&&<div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
     </div>
   );
