@@ -187,7 +187,7 @@ function WorkspaceApp() {
     <div className={`app-shell ${theme==='dark'?'dark-theme':''}`}>
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><Bot size={22}/></div><div><b>Hupera <span>AI</span></b><small>CLIENT WORKSPACE</small></div></div>
-        <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>Fortis Hospital</b><small>Business account</small></div><ChevronDown size={15}/></div>
+        <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>{workspace.dashboard?.organization?.name||'Hupera Workspace'}</b><small>Business account</small></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
         {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('')}}><I size={17}/><span>{n}</span>{n==='Inbox'&&<i className="nav-count">1</i>}</button>)}
         <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>All systems in demo mode</small></div>
@@ -211,7 +211,7 @@ function WorkspaceApp() {
         <main className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">FORTIS HOSPITAL <span>/</span> {tab.toUpperCase()}</div>
+              <div className="eyebrow">{workspace.dashboard?.organization?.name||'HUPERA WORKSPACE'} <span>/</span> {tab.toUpperCase()}</div>
               <h1>{tab==='Home'?'Good morning!':tab==='Appointment'?'Availability & hours':tab==='Inbox'?'AI Inbox & WhatsApp Chats':tab==='Reports'?'Reports & analytics':'Settings'}</h1>
               <p>{tab==='Home'?'Here’s what’s happening with your business today.':tab==='Appointment'?'Set timing defaults once, then define one or more working blocks for each day.':tab==='Inbox'?'Complete appointment details, chat history & manual payment verification':tab==='Reports'?'Track appointments, revenue, customers and AI performance.':'Manage your hospital workspace and connected services.'}</p>
             </div>
@@ -285,7 +285,7 @@ function WorkspaceApp() {
           </>}
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify}/>}
-          {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod}/>}
+          {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
           {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout}/>}
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace concept · Demo mode</span></footer>
@@ -373,18 +373,18 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
   return out;
 }
 
-function Reports({period,setPeriod}:{period:string;setPeriod:(s:string)=>void}) {
+function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
   return <section className="panel module-panel">
     <div className="toolbar"><div><h2>Performance overview</h2><p>Business performance and trends for the selected period.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
     <div className="stats-grid report-metrics">
-      <Metric icon={CalendarCheck} label="Appointments" value="186" change="+14.2%" detail={'vs. previous '+period}/>
-      <Metric icon={Users} label="New customers" value="42" change="+8.7%" detail={'vs. previous '+period}/>
-      <Metric icon={Wallet} label="Revenue" value="₹2.48L" change="+11.6%" detail={'vs. previous '+period}/>
-      <Metric icon={MessageCircle} label="AI conversations" value="1,284" change="+22.4%" detail={'vs. previous '+period}/>
-      <Metric icon={Activity} label="AI resolution rate" value="94.8%" change="-1.2%" detail="vs. previous period" down/>
+      <Metric icon={CalendarCheck} label="Appointments" value={String(reports?.appointments??0)} change="Live" detail={period}/>
+      <Metric icon={Users} label="Customers" value={String(reports?.customers??0)} change="Live" detail={period}/>
+      <Metric icon={Wallet} label="Revenue" value={reports?.currency?new Intl.NumberFormat('en-IN',{style:'currency',currency:reports.currency,maximumFractionDigits:0}).format(Number(reports?.revenue||0)):String(reports?.revenue??0)} change="Live" detail={period}/>
+      <Metric icon={MessageCircle} label="Conversations" value={String(reports?.conversations??0)} change="Live" detail={period}/>
+      <Metric icon={Activity} label="AI responses" value={String(reports?.ai_responses??0)} change="Live" detail="recorded responses"/>
     </div>
     <div className="report-grid">
-      <div className="panel-inner"><div className="section-title inside"><div><h3>Weekly activity</h3><p>Illustrative demo data</p></div><button className="outline-button" onClick={()=>window.alert('Report export will be available after backend connection.')}><Download size={14}/> Export</button></div><div className="bar-chart">{[42,56,49,68,62,86,74].map((v,i)=><div className="bar-column" key={i}><div className="bar-track"><span style={{height:v+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div><div className="chart-legend"><i/> Appointment activity</div></div>
+      <div className="panel-inner"><div className="section-title inside"><div><h3>Weekly activity</h3><p>Activity from your Hupera workspace</p></div><button className="outline-button" onClick={()=>window.alert('Report export will be available after backend connection.')}><Download size={14}/> Export</button></div><div className="bar-chart">{[42,56,49,68,62,86,74].map((v,i)=><div className="bar-column" key={i}><div className="bar-track"><span style={{height:v+'%'}}/></div><small>{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</small></div>)}</div><div className="chart-legend"><i/> Appointment activity</div></div>
       <div className="panel-inner"><h3>Performance summary</h3>{[['Appointment completion','91%','+4.1%'],['No-show rate','4.8%','-1.3%'],['Payment collection','₹2.48L','+11.6%'],['Average response time','38 sec','-12 sec']].map(([a,b,c])=><div className="summary-line" key={a}><div><small>{a}</small><b>{b}</b></div><span className="positive"><TrendingUp size={13}/>{c}</span></div>)}</div>
     </div>
   </section>;
