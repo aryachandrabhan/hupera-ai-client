@@ -301,3 +301,41 @@ button {
 .payment-request-card{border-color:#b8dfc8;background:#f5fcf7}
 .payment-request-card .request-heading{color:#16834f}
 .inbox-list-head .outline-button{padding:7px 9px;font-size:9px}
+
+
+/* Android inbox: open a selected customer as a full chat screen */
+.mobile-chat-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: #2868c7;
+  font-weight: 700;
+  padding: 7px 10px 7px 0;
+}
+.mobile-chat-back svg { transform: rotate(180deg); }
+.report-data-panel { margin-top: 16px; }
+@media (max-width: 650px) {
+  .inbox-panel:not(.mobile-chat-open) .chat-detail { display: none; }
+  .inbox-panel.mobile-chat-open .inbox-list { display: none; }
+  .inbox-panel.mobile-chat-open .chat-detail {
+    display: flex;
+    width: 100%;
+    min-height: calc(100dvh - 210px);
+    max-height: none;
+    padding: 0 10px 14px;
+  }
+  .inbox-panel.mobile-chat-open .chat-thread {
+    min-height: 220px;
+    max-height: none;
+    flex: 1 1 auto;
+  }
+  .mobile-chat-back { display: inline-flex; }
+  .chat-detail-head { flex-wrap: wrap; }
+  .chat-detail-head .chat-person { min-width: 0; }
+  .chat-detail-head > .outline-button { width: 100%; }
+  .report-data-panel { padding: 12px; }
+  .report-data-panel .section-title { align-items: flex-start; gap: 8px; }
+  .report-data-panel .section-title .outline-button { white-space: nowrap; }
+}
