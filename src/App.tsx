@@ -220,7 +220,7 @@ function WorkspaceApp() {
           {tab==='Home'&&<>
             <div className="section-title"><h2>Today at a glance</h2><button onClick={()=>setTab('Reports')}>View reports <ArrowUpRight size={14}/></button></div>
             <div className="stats-grid">
-              <Metric icon={CalendarDays} label="Today's appointments" value={String(workspace.dashboard?.today_appointments?.length??0)} change="Live" detail="today"/>
+              <Metric icon={CalendarDays} label="Today's appointments" value={String(workspace.dashboard?.today_appointments?.total??workspace.dashboard?.today_appointments?.count??0)} change="Live" detail="today"/>
               <Metric icon={Clock3} label="Appointment pending" value={String(workspace.dashboard?.counts?.pending_appointments??0)} change="Live" detail="pending appointments"/>
               <Metric icon={CalendarCheck} label="Requested" value={String(workspace.dashboard?.counts?.appointments??0)} change="Live" detail="total appointments"/>
               <Metric icon={MessageCircle} label="Conversations" value={String(workspace.dashboard?.counts?.conversations??0)} change="Live" detail="conversations"/>
@@ -235,7 +235,7 @@ function WorkspaceApp() {
               </section>
               <section className="panel">
                 <div className="section-title inside"><h2>Upcoming appointments</h2><button onClick={()=>setTab('Inbox')}>Open inbox <ChevronRight size={14}/></button></div>
-                {(workspace.dashboard?.today_appointments||[]).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.dashboard?.today_appointments||[]).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
+                {(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at).toDateString()===new Date().toDateString()).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at).toDateString()===new Date().toDateString()).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
               </section>
             </div>
             <section className="panel activity-panel">
