@@ -144,7 +144,7 @@ function WorkspaceApp() {
 
   useEffect(()=>{void refreshWorkspace();},[]);
 
-  useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab]);
+  useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
 
   useEffect(()=>{
     if(!active.conversationId||tab!=='Inbox')return;
