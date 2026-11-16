@@ -147,9 +147,9 @@ function WorkspaceApp() {
   useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab]);
 
   useEffect(()=>{
-    if(!active.conversationId)return;
+    if(!active.conversationId||tab!=='Inbox')return;
     let cancelled=false;
-    getHuperaResource<any>('thread',{conversation_id:active.conversationId}).then((data)=>{
+    const loadThread=()=>getHuperaResource<any>('thread',{conversation_id:active.conversationId}).then((data)=>{
       if(cancelled)return;
       const messages=(data.messages||[]).map((m:any)=>({
         from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
@@ -157,8 +157,10 @@ function WorkspaceApp() {
       } as Msg));
       setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
     }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
-    return ()=>{cancelled=true;};
-  },[active.conversationId]);
+    void loadThread();
+    const timer=window.setInterval(()=>{void loadThread();},3000);
+    return ()=>{cancelled=true;window.clearInterval(timer);};
+  },[active.conversationId,tab]);
 
   const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');};
 
