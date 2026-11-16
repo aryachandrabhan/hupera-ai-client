@@ -57,7 +57,8 @@ function WorkspaceApp() {
   const [dataError,setDataError]=useState('');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
-  const [alertsEnabled,setAlertsEnabled]=useState(false);
+  const [alertsEnabled,setAlertsEnabled]=useState(()=>typeof Notification!=='undefined'&&Notification.permission==='granted');
+  const alertAudio=useRef<AudioContext|null>(null);
   const priorityInitialized=useRef(false);
   const previousPriorityIds=useRef<Set<string>>(new Set());
   const [toast,setToast]=useState('');
@@ -134,7 +135,7 @@ function WorkspaceApp() {
       setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports});
       setChats(mapped);
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
-      if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id))new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});}}
+      if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
       if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
@@ -159,7 +160,7 @@ function WorkspaceApp() {
     return ()=>{cancelled=true;};
   },[active.conversationId]);
 
-  const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');notify(permission==='granted'?'Inbox notifications enabled.':'Notification permission was not granted.');};
+  const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');};
 
   const paymentReceived=()=>notify('Payment verification must be confirmed by the connected payment provider webhook.');
 
@@ -169,7 +170,7 @@ function WorkspaceApp() {
     catch(e){notify(e instanceof Error?e.message:'Could not confirm appointment.');}
   };
 
-  const simulatePaid=()=>notify('Payment events must come from the connected WhatsApp workflow; a demo payment cannot be created here.');
+  // Payment status is sourced from the verified payment webhook, never simulated.
 
   const reschedule=async()=>{
     if(!active.bookingId){notify('No linked appointment is available to reschedule.');return;}
@@ -197,7 +198,7 @@ function WorkspaceApp() {
         <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>{workspace.dashboard?.organization?.name||'Hupera Workspace'}</b><small>Business account</small></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
         {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('')}}><I size={17}/><span>{n}</span>{n==='Inbox'&&chats.length>0&&<i className="nav-count">{chats.length}</i>}</button>)}
-        <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>All systems in demo mode</small></div>
+        <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>Live inbox · backend connected</small></div>
       </aside>
 
       <div className="main-area">
@@ -295,7 +296,7 @@ function WorkspaceApp() {
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
           {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout}/>}
 
-          <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace concept · Demo mode</span></footer>
+          <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
       </div>
 
