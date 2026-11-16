@@ -55,7 +55,11 @@ function Fact({icon,label,value}:{icon:any;label:string;value:string}) {
 
 function WorkspaceApp() {
   const [tab,setTab]=useState<Tab>('Home');
-  const [chats,setChats]=useState<Chat[]>(initialChats);\n  const [selected,setSelected]=useState('');\n  const [workspace,setWorkspace]=useState<any>({dashboard:null,employees:[],appointments:[],reports:null});\n  const [dataLoading,setDataLoading]=useState(true);\n  const [dataError,setDataError]=useState('');
+  const [chats,setChats]=useState<Chat[]>(initialChats);
+  const [selected,setSelected]=useState('');
+  const [workspace,setWorkspace]=useState<any>({dashboard:null,employees:[],appointments:[],reports:null});
+  const [dataLoading,setDataLoading]=useState(true);
+  const [dataError,setDataError]=useState('');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
   const [human,setHuman]=useState(false);
