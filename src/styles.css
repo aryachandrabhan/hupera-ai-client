@@ -293,3 +293,11 @@ button {
     font-size: 13px;
   }
 }
+
+/* Priority inbox and action cards */
+.chat-row.priority-chat{background:#effaf3;border:1px solid #b7e4c7;border-left:4px solid #20a464;margin:4px 5px;width:calc(100% - 10px);border-radius:9px}
+.chat-row.priority-chat:hover,.chat-row.priority-chat.chosen{background:#e5f7ec;box-shadow:inset 3px 0 #16834f}
+.priority-badge{display:inline-flex!important;width:max-content;max-width:100%;padding:4px 7px;border-radius:5px;background:#d7f3e1;color:#126b43!important;font-size:8px!important;font-weight:800;white-space:normal}
+.payment-request-card{border-color:#b8dfc8;background:#f5fcf7}
+.payment-request-card .request-heading{color:#16834f}
+.inbox-list-head .outline-button{padding:7px 9px;font-size:9px}
