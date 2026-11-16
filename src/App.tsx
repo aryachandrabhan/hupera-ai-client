@@ -438,7 +438,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
 function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlerts,dashboard,employees}:{section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;dashboard:any;employees:any[]}) {
   const items=[['Business profile','Organization information'],['WhatsApp integration','Channel connection status'],['AI Workforce','Your active AI employees'],['Payments','Payment setup and verification'],['Team & permissions','Workspace access'],['Notifications','Device notification preferences'],['Appearance','Light and dark theme'],['Google Calendar','Calendar connection status'],['Billing & support','Subscription and help']];
   const org=dashboard?.organization||{};
-  const openWorkspace=()=>{window.open('https://hupera-ai.hatchable.site','_blank','noopener,noreferrer');};
+  const openWorkspace=()=>{void Browser.open({url:'https://hupera-ai.hatchable.site'});};
   return <section className="panel module-panel">
     <div className="toolbar"><div><h2>Workspace settings</h2><p>Choose a setting to view its current state and available action.</p></div></div>
     <div className="settings-layout">
