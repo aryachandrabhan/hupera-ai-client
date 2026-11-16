@@ -39,19 +39,40 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+      - name: Validate Android Manifest XML
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          path = "android/app/src/main/AndroidManifest.xml"
+
+          try:
+              ET.parse(path)
+              print("SUCCESS: Manifest XML syntax is valid.")
+          except ET.ParseError as error:
+              print(f"MANIFEST XML ERROR: {error}")
+              raise
+          PY
+
       - name: Verify source Android Manifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+
           test -f "$MANIFEST"
+          grep -q 'android:name=".MainActivity"' "$MANIFEST"
+          grep -q 'android:name="android.intent.action.MAIN"' "$MANIFEST"
+          grep -q 'android:name="android.intent.action.LAUNCHER"' "$MANIFEST"
           grep -q 'android:scheme="hupera"' "$MANIFEST"
           grep -q 'android:host="auth"' "$MANIFEST"
-          echo "Source deep link configuration verified."
+
+          echo "SUCCESS: Launcher and Hupera deep link configuration verified."
 
       - name: Build Debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew :app:processDebugMainManifest --stacktrace --info
+          ./gradlew assembleDebug --stacktrace
 
       - name: Verify deep link inside APK
         run: |
