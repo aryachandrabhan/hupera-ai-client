@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { clearToken, getToken, exchangeMobileCode } from './huperaApi';
+import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction } from './huperaApi';
 import {
   Activity, ArrowUpRight, Bell, Bot, CalendarCheck, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
@@ -14,7 +14,7 @@ import './styles.css';
 
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {from:'customer'|'ai'|'human'|'system';text:string;time:string};
-type Chat = {id:number;name:string;initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
+type Chat = {id:string;conversationId:string;bookingId?:string;name:string;initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
 type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
@@ -55,8 +55,7 @@ function Fact({icon,label,value}:{icon:any;label:string;value:string}) {
 
 function WorkspaceApp() {
   const [tab,setTab]=useState<Tab>('Home');
-  const [chats,setChats]=useState(initialChats);
-  const [selected,setSelected]=useState(1);
+  const [chats,setChats]=useState<Chat[]>(initialChats);\n  const [selected,setSelected]=useState('');\n  const [workspace,setWorkspace]=useState<any>({dashboard:null,employees:[],appointments:[],reports:null});\n  const [dataLoading,setDataLoading]=useState(true);\n  const [dataError,setDataError]=useState('');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
   const [human,setHuman]=useState(false);
@@ -82,7 +81,7 @@ function WorkspaceApp() {
     }
   });
 
-  const active=chats.find(c=>c.id===selected)||chats[0];
+  const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
 
   const notify=(s:string)=>{
@@ -104,41 +103,83 @@ function WorkspaceApp() {
   window.dispatchEvent(new Event('hupera-logout'));
 };
 
-  const patchChat=(id:number,p:Partial<Chat>)=>setChats(old=>old.map(c=>c.id===id?{...c,...p}:c));
-  const addMsg=(id:number,m:Msg)=>setChats(old=>old.map(c=>c.id===id?{...c,messages:[...c.messages,m],preview:m.text,time:m.time}:c));
+  const patchChat=(id:string,p:Partial<Chat>)=>setChats(old=>old.map(c=>c.id===id?{...c,...p}:c));
+  const addMsg=(id:string,m:Msg)=>setChats(old=>old.map(c=>c.id===id?{...c,messages:[...c.messages,m],preview:m.text,time:m.time}:c));
 
-  const paymentReceived=()=>{
-    patchChat(active.id,{status:'Confirmed & Synced'});
-    addMsg(active.id,{from:'system',text:'Payment verified by the hospital. Appointment confirmed. Customer confirmation and calendar invitation are queued in this demo.',time:'Now'});
-    notify('Payment verified and appointment confirmed in demo mode.');
+  const refreshWorkspace=async()=>{
+    setDataLoading(true);setDataError('');
+    try{
+      const [dashboard,employees,appointments,inbox]=await Promise.all([
+        getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
+        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox')
+      ]);
+      const bookings=Array.isArray(appointments.appointments)?appointments.appointments:[];
+      const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
+      const mapped:Chat[]=conversations.map((c:any)=>{
+        const b=c.latest_booking||bookings.find((x:any)=>x.conversation_id===c.id)||{};
+        const customerName=c.customer_name||b.customer_name||c.subject||'Customer';
+        const stamp=b.starts_at?new Date(b.starts_at):null;
+        const validDate=stamp&&!Number.isNaN(stamp.getTime())?stamp:null;
+        return {id:String(c.id),conversationId:String(c.id),bookingId:b.id?String(b.id):undefined,
+          name:customerName,initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
+          status:String(b.status||c.status||'Open').replace(/_/g,' '),
+          time:c.last_message_at?new Date(c.last_message_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
+          preview:c.last_message||c.subject||'No messages yet',department:b.service_name||b.title||'—',
+          doctor:b.resource_name||'—',date:validDate?validDate.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—',
+          day:validDate?validDate.toLocaleDateString('en-IN',{weekday:'long'}):'',
+          slot:validDate?validDate.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—',
+          format:b.location||b.booking_type||'—',amount:Number(b.amount||b.total_amount||0),
+          payment:b.payment_status||'—',upi:'',transactionId:b.transaction_reference||undefined,messages:[]};
+      });
+      setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports:workspace.reports});
+      setChats(mapped);
+      if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
+    }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
+    finally{setDataLoading(false);}
   };
 
-  const confirm=()=>{
-    patchChat(active.id,{status:'Confirmed & Synced'});
-    addMsg(active.id,{from:'system',text:'Appointment confirmed by the hospital. Confirmation email and calendar invitation are queued in this demo.',time:'Now'});
-    notify('Appointment confirmed in demo mode.');
+  useEffect(()=>{void refreshWorkspace();},[]);
+
+  useEffect(()=>{
+    if(!active.conversationId)return;
+    let cancelled=false;
+    getHuperaResource<any>('thread',{conversation_id:active.conversationId}).then((data)=>{
+      if(cancelled)return;
+      const messages=(data.messages||[]).map((m:any)=>({
+        from:m.sender_type==='customer'?'customer':m.sender_type==='human'?'human':m.sender_type==='system'?'system':'ai',
+        text:String(m.content||''),time:m.created_at?new Date(m.created_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
+      } as Msg));
+      setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));
+    }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
+    return ()=>{cancelled=true;};
+  },[active.conversationId]);
+
+  const paymentReceived=async()=>{
+    if(!active.bookingId){notify('No linked appointment is available to update.');return;}
+    try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'confirmed'});notify('Appointment confirmed in Hupera.');await refreshWorkspace();}
+    catch(e){notify(e instanceof Error?e.message:'Could not confirm appointment.');}
   };
 
-  const simulatePaid=()=>{
-    patchChat(active.id,{status:'Payment Paid - Verify',payment:'Pay Now',transactionId:'UPI/DEMO/82910394821'});
-    addMsg(active.id,{from:'customer',text:'I have made the payment successfully. [I Have Paid Clicked] — demo event',time:'Now'});
-    notify('Demo I Have Paid event added.');
+  const confirm=async()=>{
+    if(!active.bookingId){notify('No linked appointment is available to confirm.');return;}
+    try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'confirmed'});notify('Appointment confirmed.');await refreshWorkspace();}
+    catch(e){notify(e instanceof Error?e.message:'Could not confirm appointment.');}
   };
 
-  const reschedule=()=>{
-    const v=window.prompt('Enter new appointment date and time:',active.date+' · '+active.slot);
-    if(v){
-      addMsg(active.id,{from:'system',text:'Reschedule requested: '+v+'. Live calendar update requires integration.',time:'Now'});
-      notify('Reschedule request recorded in demo.');
-    }
+  const simulatePaid=()=>notify('Payment events must come from the connected WhatsApp workflow; a demo payment cannot be created here.');
+
+  const reschedule=async()=>{
+    if(!active.bookingId){notify('No linked appointment is available to reschedule.');return;}
+    const v=window.prompt('Enter new date and time (YYYY-MM-DDTHH:mm):');
+    if(v){const date=new Date(v);if(Number.isNaN(date.getTime())){notify('Enter a valid date and time.');return;}
+      try{await postHuperaAction('booking_reschedule',{booking_id:active.bookingId,starts_at:date.toISOString()});notify('Reschedule submitted.');await refreshWorkspace();}
+      catch(e){notify(e instanceof Error?e.message:'Could not reschedule appointment.');}}
   };
 
-  const cancel=()=>{
-    if(window.confirm('Cancel this appointment in demo mode?')){
-      patchChat(active.id,{status:'Cancelled'});
-      addMsg(active.id,{from:'system',text:'Appointment marked cancelled in this demo. Calendar cancellation requires integration.',time:'Now'});
-      notify('Appointment cancelled in demo.');
-    }
+  const cancel=async()=>{
+    if(!active.bookingId){notify('No linked appointment is available to cancel.');return;}
+    if(window.confirm('Cancel this appointment?')){try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'cancelled'});notify('Appointment cancelled.');await refreshWorkspace();}
+      catch(e){notify(e instanceof Error?e.message:'Could not cancel appointment.');}}
   };
 
   const updateDay=(i:number,p:Partial<Day>)=>setDays(old=>old.map((d,n)=>n===i?{...d,...p}:d));
