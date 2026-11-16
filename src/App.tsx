@@ -145,6 +145,15 @@ function WorkspaceApp() {
 
   useEffect(()=>{void refreshWorkspace();},[]);
 
+  useEffect(()=>{
+    let cancelled=false;
+    getHuperaResource<any>('reports',{days:period.replace(' days','')})
+      .then(reports=>{if(!cancelled)setWorkspace((old:any)=>({...old,reports}));})
+      .catch(error=>{if(!cancelled)setDataError(error instanceof Error?error.message:'Unable to load reports.');});
+    return ()=>{cancelled=true;};
+  },[period]);
+
+
   useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
 
   useEffect(()=>{
