@@ -48,6 +48,7 @@ function WorkspaceApp() {
   const [alertsEnabled,setAlertsEnabled]=useState(()=>typeof Notification!=='undefined'&&Notification.permission==='granted');
   const alertAudio=useRef<AudioContext|null>(null);
   const priorityInitialized=useRef(false);
+  const workspaceSyncBusy=useRef(false);
   const previousPriorityIds=useRef<Set<string>>(new Set());
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
@@ -98,7 +99,8 @@ function WorkspaceApp() {
 
 
   const refreshWorkspace=async()=>{
-    setDataLoading(true);setDataError('');
+    if(workspaceSyncBusy.current||document.hidden)return;
+    workspaceSyncBusy.current=true;setDataError('');
     try{
       const [dashboard,employees,appointments,inbox,reports]=await Promise.all([
         getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
@@ -129,7 +131,7 @@ function WorkspaceApp() {
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
       if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
-    finally{setDataLoading(false);}
+    finally{setDataLoading(false);workspaceSyncBusy.current=false;}
   };
 
 
@@ -225,7 +227,7 @@ function WorkspaceApp() {
   },[period]);
 
 
-  useEffect(()=>{const timer=window.setInterval(()=>{void refreshWorkspace();},2500);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
+  useEffect(()=>{const timer=window.setInterval(()=>{void refreshWorkspace();},1000);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
 
   useEffect(()=>{
     if(!active.conversationId||tab!=='Inbox')return;
@@ -239,7 +241,7 @@ function WorkspaceApp() {
       setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
     }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
     void loadThread();
-    const timer=window.setInterval(()=>{void loadThread();},3000);
+    const timer=window.setInterval(()=>{if(!document.hidden)void loadThread();},1000);
     return ()=>{cancelled=true;window.clearInterval(timer);};
   },[active.conversationId,tab]);
 
@@ -329,7 +331,7 @@ function WorkspaceApp() {
             {tab==='Home'&&<div className="date-chip"><CalendarDays size={15}/> {new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>}
           </div>
 
-          <div className="demo-strip"><span className="demo-indicator"/><div><b>{dataLoading?'Loading workspace':'Live workspace data'}</b><span>{dataError||'Showing information from your signed-in Hupera organization.'}</span></div><button className="outline-button" onClick={()=>void refreshWorkspace()} disabled={dataLoading}>Refresh</button></div>
+          <div className="demo-strip"><span className="demo-indicator"/><div><b>{dataLoading?'Loading workspace':'Live workspace data'}</b><span>{dataError||'Automatically syncing with your signed-in Hupera workspace.'}</span></div></div>
 
           {tab==='Home'&&<>
             <div className="section-title"><h2>Today at a glance</h2><button onClick={()=>setTab('Reports')}>View reports <ArrowUpRight size={14}/></button></div>
@@ -348,7 +350,7 @@ function WorkspaceApp() {
               </section>
               <section className="panel">
                 <div className="section-title inside"><h2>Upcoming appointments</h2><button onClick={()=>setTab('Inbox')}>Open inbox <ChevronRight size={14}/></button></div>
-                {(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at).toDateString()===new Date().toDateString()).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at).toDateString()===new Date().toDateString()).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
+                {(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at)>=new Date()&&!['cancelled','declined'].includes(String(b.status||'').toLowerCase())).sort((a:any,b:any)=>new Date(a.starts_at).getTime()-new Date(b.starts_at).getTime()).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at)>=new Date()&&!['cancelled','declined'].includes(String(b.status||'').toLowerCase())).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
               </section>
             </div>
             <section className="panel activity-panel">
@@ -359,30 +361,14 @@ function WorkspaceApp() {
           </>}
 
           {tab==='Inbox'&&<>
-            <div className="inbox-global-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search patients, appointments, UPI ID..."/><span className="calendar-sync"><CheckCircle2 size={14}/> Hupera workspace</span></div>
             <section className={'inbox-panel '+(mobileChatOpen?'mobile-chat-open':'')}>
               <aside className="inbox-list">
-                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · auto-refresh every 5 seconds</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
+                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · automatic 1-second sync</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
-                {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}
+                <div className="inbox-chat-list">{filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}</div>
               </aside>
               <section className="chat-detail">
                 <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'🤖 Resume AI Agent':'🤖 AI Active — Click to Take Over'}</button></div>
-                <div className="appointment-summary">
-                  <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
-                  <div className="appointment-facts">
-                    <Fact icon={<Stethoscope/>} label="Department" value={active.department}/>
-                    <Fact icon={<UserRound/>} label="Doctor / staff" value={active.doctor}/>
-                    <Fact icon={<CalendarDays/>} label="Date & day" value={active.date+' ('+active.day+')'}/>
-                    <Fact icon={<Clock3/>} label="Appointment time" value={active.slot}/>
-                    <Fact icon={<MapPin/>} label="Visit type" value={active.format}/>
-                    <Fact icon={<Wallet/>} label="Consultation fee" value={'₹'+active.amount.toLocaleString('en-IN')}/>
-                    <Fact icon={<CreditCard/>} label="Payment choice" value={active.payment}/>
-                    {active.transactionId&&<Fact icon={<FileText/>} label="Transaction ID" value={active.transactionId}/>}
-                  </div>
-                  {active.payment==='Pay Now'&&<div className="upi-strip"><div><small>UPI ID</small><b>{active.upi}</b></div><div><small>Payment amount</small><b>₹{active.amount.toLocaleString('en-IN')}</b></div><div><small>UPI QR</small><b>Generated by payment provider when connected</b></div></div>}
-                  
-                </div>
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent active'}</span></div>
                 <div className="chat-thread">{[
                   ...(active.appointments||[]).map((item:any)=>({kind:'appointment',item,at:item.created_at||item.starts_at||''})),
@@ -415,7 +401,7 @@ function WorkspaceApp() {
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings}/> }
+          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
@@ -518,6 +504,9 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   };
   const statusRows=Array.isArray(reports?.status_breakdown)?reports.status_breakdown:[];
   const sourceRows=Array.isArray(reports?.source_breakdown)?reports.source_breakdown:[];
+  const chartValues=statusRows.map((x:any)=>({label:String(x.status||'Other').replace(/_/g,' '),value:Number(x.total||0)}));
+  const maxChart=Math.max(1,...chartValues.map((x:any)=>x.value));
+  const exportPng=()=>{const svg=document.getElementById('hupera-report-visual') as SVGSVGElement|null;if(!svg)return;const copy=svg.cloneNode(true) as SVGSVGElement;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}));const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=1400;canvas.height=700;const ctx=canvas.getContext('2d');if(ctx){ctx.fillStyle='#fff';ctx.fillRect(0,0,1400,700);ctx.drawImage(img,0,0,1400,700);const link=document.createElement('a');link.download='hupera-analytics-'+period.replace(/\\s+/g,'-')+'.png';link.href=canvas.toDataURL('image/png');link.click();}URL.revokeObjectURL(url);};img.onerror=()=>URL.revokeObjectURL(url);img.src=url;};
   return <section className="panel module-panel">
     <div className="toolbar"><div><h2>Performance overview</h2><p>Metrics from this organisation's live database.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
     {!reports?<div className="empty-block">Report data is not available. Check the connection and refresh.</div>:<>
@@ -529,9 +518,10 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
         <Metric icon={MessageCircle} label="Human responses" value={String(humanResponses)} change="Live" detail="staff sent messages"/>
       </div>
       <div className="panel-inner report-data-panel">
-        <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><div className="report-export-actions"><button className="outline-button" onClick={exportCsv}><Download size={14}/> Export CSV</button><button className="outline-button" onClick={()=>window.print()}><FileText size={14}/> Save PDF</button></div></div>
+        <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><div className="report-export-actions"><button className="outline-button" onClick={exportCsv}><Download size={14}/> CSV</button><button className="outline-button" onClick={exportPng}><Download size={14}/> PNG</button><button className="outline-button" onClick={()=>window.print()}><FileText size={14}/> PDF</button></div></div>
         {rows.map(([label,value])=><div className="summary-line" key={String(label)}><div><small>{label}</small><b>{String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):String(value)}</b></div></div>)}
       </div>
+      <div className="report-visual-card"><div className="section-title inside"><div><h3>Workspace performance</h3><p>Visualised from live reporting totals.</p></div></div><svg id="hupera-report-visual" className="report-svg" viewBox="0 0 1200 560" role="img" aria-label="Appointment status bars and AI versus team response line"><rect width="1200" height="560" rx="24" fill="#f7f9ff"/><text x="48" y="54" fontSize="25" fontWeight="700" fill="#1b2a44">Appointment status</text>{chartValues.slice(0,6).map((v:any,i:number)=><g key={v.label}><text x="48" y={112+i*58} fontSize="18" fill="#52627a">{v.label}</text><rect x="260" y={91+i*58} width="650" height="25" rx="12" fill="#e4eaf5"/><rect x="260" y={91+i*58} width={650*v.value/maxChart} height="25" rx="12" fill="#3976d7"/><text x="930" y={112+i*58} fontSize="18" fontWeight="700" fill="#1b2a44">{v.value}</text></g>)}<text x="48" y="475" fontSize="25" fontWeight="700" fill="#1b2a44">AI vs team responses</text><path d="M300 470 L650 390 L1000 470" fill="none" stroke="#12a37a" strokeWidth="5" strokeLinecap="round"/><circle cx="300" cy="470" r="10" fill="#3976d7"/><circle cx="650" cy="390" r="10" fill="#12a37a"/><circle cx="1000" cy="470" r="10" fill="#3976d7"/><text x="270" y="525" fontSize="18" fill="#52627a">AI {Number(ai.total||0)}</text><text x="600" y="355" fontSize="18" fill="#52627a">Total {Number(ai.total||0)+humanResponses}</text><text x="950" y="525" fontSize="18" fill="#52627a">Team {humanResponses}</text></svg></div>
       <div className="report-grid" style={{marginTop:16}}>
         <div className="panel-inner"><h3>Appointment status breakdown</h3>{statusRows.length?statusRows.map((item:any)=><div className="summary-line" key={item.status}><div><small>{String(item.status||'unknown').replace(/_/g,' ')}</small><b>{item.total}</b></div></div>):<p>No appointment status data for this period.</p>}</div>
         <div className="panel-inner"><h3>Booking sources</h3>{sourceRows.length?sourceRows.map((item:any)=><div className="summary-line" key={item.source}><div><small>{item.source||'unknown'}</small><b>{item.total}</b></div></div>):<p>No booking source data for this period.</p>}</div>
@@ -540,7 +530,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   </section>;
 }
 
-function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave}:{section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void}) {
+function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void}) {
   const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Payment connection status'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status'],['Billing & support','Plan and account']];
   const org=settingsData?.organization||{},prefs=settingsData?.preferences||{},integrations=settingsData?.integrations||{};
   const [draft,setDraft]=useState<any>({});
@@ -558,7 +548,7 @@ function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlert
           <button className="primary-button" disabled={saving||!settingsData} onClick={()=>onSave(draft,preferences)}>{saving?'Saving…':'Save business profile'}</button>
         </>}
         {section==='WhatsApp integration'&&<><p>WhatsApp credentials remain protected on the server. This view shows the live connection without exposing access tokens.</p><div className="integration-state"><MessageCircle/><div><b>{status(integrations.whatsapp)}</b><small>{integrations.whatsapp?.verified_name||integrations.whatsapp?.display_phone_number||'No connected WhatsApp sender is available.'}</small></div></div><div className="summary-line"><div><small>Last updated</small><b>{integrations.whatsapp?.updated_at?new Date(integrations.whatsapp.updated_at).toLocaleString('en-IN'):'—'}</b></div></div></>}
-        {section==='AI Workforce'&&<><p>AI workforce configuration is organisation-scoped.</p><div className="summary-line"><div><small>AI approval required</small><b>{preferences.ai_approval_required===false?'No':'Yes'}</b></div><input aria-label="AI approval required" type="checkbox" checked={preferences.ai_approval_required!==false} onChange={e=>setPreferences((old:any)=>({...old,ai_approval_required:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save AI preferences</button></>}
+        {section==='AI Workforce'&&<><p>Manage AI employees enabled for this workspace. Status is synced from your organisation.</p>{employees.length?employees.map((employee:any)=><div className="integration-state" key={employee.id}><Bot/><div><b>{employee.name||employee.employee_type||'AI employee'}</b><small>{employee.description||employee.employee_type||'Workspace AI employee'} · {employee.status||'Status unavailable'}</small></div></div>):<div className="empty-block">No AI employees are configured for this workspace yet.</div>}<div className="summary-line"><div><small>AI approval required</small><b>{preferences.ai_approval_required===false?'No':'Yes'}</b></div><input aria-label="AI approval required" type="checkbox" checked={preferences.ai_approval_required!==false} onChange={e=>setPreferences((old:any)=>({...old,ai_approval_required:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save AI preferences</button></>}
         {section==='Payments'&&<><p>Payment provider state is read from your workspace. Provider secrets are never displayed in the mobile app.</p>{(integrations.payments||[]).length?(integrations.payments||[]).map((item:any,i:number)=><div className="integration-state" key={i}><Wallet/><div><b>{item.provider||'Payment provider'} · {item.status||'Unknown'}</b><small>{item.updated_at?new Date(item.updated_at).toLocaleString('en-IN'):''}</small></div></div>):<div className="empty-block">No payment connection record was returned for this organisation.</div>}</>}
         {section==='Team & permissions'&&<><p>Current role for this authenticated workspace.</p><div className="summary-line"><div><small>Workspace role</small><b>{org.role||'Workspace member'}</b></div></div><div className="summary-line"><div><small>Business workspace</small><b>{org.name||'—'}</b></div></div><p>Team invitations and role changes require the organisation's team-management permission API, which is not exposed to this mobile session yet.</p></>}
         {section==='Notifications'&&<><p>Enable foreground alerts on this device. Background push requires Firebase project configuration.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> Enable device alerts</button><div className="summary-line"><div><small>Device permission</small><b>{typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b></div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
