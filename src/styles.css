@@ -531,3 +531,12 @@ button {
 .dark-theme .assigned-person-chip{background:#173326;border-color:#245b3c;color:#a7f3c1}
 .dark-theme .assigned-person-chip button{background:#245b3c;color:#d1fae5}
 @media(max-width:650px){.notification-panel{position:fixed;top:64px;right:10px;width:min(370px,calc(100vw - 20px));max-height:calc(100dvh - 150px)}.chat-day-divider{margin:10px auto 13px}}
+
+
+/* WhatsApp-style jump-to-latest control for unread messages in an open thread */
+.chat-detail{position:relative}
+.chat-jump-button{position:absolute;right:28px;bottom:104px;z-index:8;width:42px;height:42px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#263747;color:#fff;box-shadow:0 3px 12px rgba(15,23,42,.25)}
+.chat-jump-button span{position:absolute;top:-7px;right:-5px;min-width:20px;height:20px;padding:0 5px;border-radius:20px;display:grid;place-items:center;background:#16a34a;color:#fff;border:2px solid #fff;font-size:10px;font-weight:800;line-height:1}
+.dark-theme .chat-jump-button{background:#34465b}
+.dark-theme .chat-jump-button span{border-color:#151f30}
+@media(max-width:850px){.chat-jump-button{right:22px;bottom:calc(96px + env(safe-area-inset-bottom))}}
