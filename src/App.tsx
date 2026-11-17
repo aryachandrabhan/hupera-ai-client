@@ -1,6 +1,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { Browser } from '@capacitor/browser';
 import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction } from './huperaApi';
 import {
@@ -211,6 +213,83 @@ function WorkspaceApp() {
   },[tab,mobileChatOpen,settings]);
 
   useEffect(()=>{void refreshWorkspace();},[]);
+
+  // Native Firebase push registration. Ably remains the foreground real-time transport.
+  useEffect(()=>{
+    if(!Capacitor.isNativePlatform())return;
+    let cancelled=false;
+    const listeners:any[]=[];
+    const setup=async()=>{
+      try{
+        const sessionToken=await getToken();
+        if(!sessionToken||cancelled)return;
+        const registration=await PushNotifications.addListener('registration',async(tokenInfo)=>{
+          if(cancelled||!tokenInfo?.value)return;
+          try{
+            const currentSession=await getToken();
+            if(!currentSession)return;
+            const response=await fetch('https://hupera-ai.hatchable.site/api/mobile-push-token',{
+              method:'POST',
+              headers:{'Content-Type':'application/json',Authorization:'Bearer '+currentSession},
+              body:JSON.stringify({token:tokenInfo.value,deviceName:'Hupera Android'})
+            });
+            if(!response.ok)console.warn('Hupera push token registration failed',response.status);
+          }catch(error){console.warn('Hupera push token registration failed',error);}
+        });
+        listeners.push(registration);
+        const registrationError=await PushNotifications.addListener('registrationError',error=>{
+          console.warn('Firebase push registration error',error);
+        });
+        listeners.push(registrationError);
+        const received=await PushNotifications.addListener('pushNotificationReceived',notification=>{
+          if(cancelled)return;
+          void refreshWorkspace();
+          if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
+          if(notification?.title)notify(notification.title);
+        });
+        listeners.push(received);
+        const action=await PushNotifications.addListener('pushNotificationActionPerformed',event=>{
+          if(cancelled)return;
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:event?.notification?.data||{}}));
+        });
+        listeners.push(action);
+        let permission=await PushNotifications.checkPermissions();
+        if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
+        if(cancelled||permission.receive!=='granted')return;
+        await PushNotifications.createChannel({
+          id:'hupera_messages',
+          name:'Hupera messages',
+          description:'WhatsApp messages, appointment and payment updates',
+          importance:5,
+          visibility:1,
+          sound:'default',
+          vibration:true
+        });
+        await PushNotifications.register();
+      }catch(error){
+        console.warn('Hupera native notifications could not start',error);
+      }
+    };
+    void setup();
+    return()=>{
+      cancelled=true;
+      listeners.forEach(listener=>{try{void listener.remove();}catch{}});
+    };
+  },[]);
+
+  // Notification taps open the relevant Hupera section.
+  useEffect(()=>{
+    const open=(event:Event)=>{
+      const data=(event as CustomEvent).detail||{};
+      if(data.route==='appointment'){setTab('Appointment');setMobileChatOpen(false);return;}
+      if(data.route==='inbox'){
+        setTab('Inbox');
+        if(data.conversationId){setSelected(String(data.conversationId));setMobileChatOpen(true);}
+      }
+    };
+    window.addEventListener('hupera:push-open',open);
+    return()=>window.removeEventListener('hupera:push-open',open);
+  },[]);
 
   useEffect(()=>{if(tab==='Appointment')void loadAvailability();if(tab==='Settings')void loadSettings();},[tab]);
 
