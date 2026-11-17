@@ -194,6 +194,7 @@ function WorkspaceApp() {
   useEffect(()=>{
     const onPaymentReturn=(event:Event)=>{
       const orderId=String((event as CustomEvent).detail?.orderId||'');
+      delete (window as any).__huperaPendingPaymentOrderId;
       setTab('Settings');
       setSettings('Payments');
       void refreshCashfreePayment(orderId||undefined).catch(error=>notify(error instanceof Error?error.message:'Payment status could not be verified yet.'));
