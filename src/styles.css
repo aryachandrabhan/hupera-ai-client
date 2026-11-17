@@ -753,3 +753,9 @@ button {
   color:#edf4ff!important;
 }
 .dark-theme .insight-card .donut-ring>div { background:#142136!important; color:#f1f5fb!important; }
+
+
+/* Consistent spacing for the reordered report priority cards. */
+.report-metrics + .insight-card { margin-top:16px; }
+.insight-card + .insight-card { margin-top:14px; }
+.insight-card + .report-data-panel { margin-top:16px; }
