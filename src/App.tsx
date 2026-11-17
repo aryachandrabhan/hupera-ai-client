@@ -19,7 +19,7 @@ import './styles.css';
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {id?:string;from:'customer'|'ai'|'human'|'system';text:string;time:string;type?:string;createdAt?:string;metadata?:any};
 type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;needsAction:boolean;priorityType?:string;unreadCount:number;pendingRequestCount?:number;appointments:any[];payments:any[];initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
-type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number;resourceId:string;serviceId:string};
+type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number;resourceId:string;resourceIds?:string[];serviceId:string};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
 const initialChats:Chat[]=[];
