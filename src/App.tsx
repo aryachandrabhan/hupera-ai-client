@@ -49,6 +49,7 @@ function WorkspaceApp() {
   const [showNotifications,setShowNotifications]=useState(false);
   const [alertsEnabled,setAlertsEnabled]=useState(false);
   const [pushPermission,setPushPermission]=useState('unknown');
+  const [pushError,setPushError]=useState('');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
   const alertAudio=useRef<AudioContext|null>(null);
@@ -336,14 +337,19 @@ function WorkspaceApp() {
               headers:{'Content-Type':'application/json',Authorization:'Bearer '+currentSession},
               body:JSON.stringify({token:tokenInfo.value,deviceName:'Hupera Android'})
             });
-            if(!response.ok){console.warn('Hupera push token registration failed',response.status);setPushPermission('registration_failed');}
-            else {setPushPermission('registered');setAlertsEnabled(true);}
-          }catch(error){console.warn('Hupera push token registration failed',error);}
+            const result=await response.json().catch(()=>({}));
+            if(!response.ok||result?.success!==true){
+              const reason=String(result?.error||('Server rejected device registration (HTTP '+response.status+').'));
+              console.warn('Hupera push token registration failed',response.status,reason);
+              setPushError(reason);setPushPermission('registration_failed');setAlertsEnabled(false);
+            }else{setPushError('');setPushPermission('registered');setAlertsEnabled(true);notify('This device is registered for push notifications.');}
+          }catch(error){const reason=error instanceof Error?error.message:String(error);console.warn('Hupera push token registration failed',error);setPushError(reason);setPushPermission('registration_failed');setAlertsEnabled(false);}
         });
         listeners.push(registration);
         const registrationError=await PushNotifications.addListener('registrationError',error=>{
+          const reason=String((error as any)?.message||(error as any)?.error||JSON.stringify(error)||'Firebase could not create a device token.');
           console.warn('Firebase push registration error',error);
-          setPushPermission('registration_failed');
+          setPushError(reason);setPushPermission('registration_failed');setAlertsEnabled(false);
         });
         listeners.push(registrationError);
         const actionPerformed=await PushNotifications.addListener('pushNotificationActionPerformed',action=>{
@@ -373,7 +379,7 @@ function WorkspaceApp() {
           try{
             const resumedPermission=await PushNotifications.checkPermissions();
             setPushPermission(resumedPermission.receive);
-            if(resumedPermission.receive==='granted')await PushNotifications.register();
+            if(resumedPermission.receive==='granted'){setPushError('');await PushNotifications.register();}
           }catch(error){console.warn('Hupera push re-registration on app resume failed',error);setPushPermission('registration_failed');}
         });
         listeners.push(appStateListener);
@@ -464,16 +470,20 @@ function WorkspaceApp() {
         let permission=await PushNotifications.checkPermissions();
         if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
         setPushPermission(permission.receive);
-        if(permission.receive!=='granted'){setAlertsEnabled(false);notify('Allow notifications for Hupera in Android settings, then try again.');return;}
+        if(permission.receive!=='granted'){setAlertsEnabled(false);setPushPermission(permission.receive);notify('Allow notifications for Hupera in Android settings, then try again.');return;}
+        const sessionToken=await getToken();
+        if(!sessionToken){setAlertsEnabled(false);setPushError('Your Hupera session is missing. Sign out and sign in again.');setPushPermission('registration_failed');notify('Please sign in again before registering this device.');return;}
+        setPushError('');setPushPermission('granted');
         await PushNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
         let localPermission=await LocalNotifications.checkPermissions();
         if(localPermission.display!=='granted')localPermission=await LocalNotifications.requestPermissions();
         if(localPermission.display!=='granted'){setAlertsEnabled(false);notify('Android notification permission is required to show alerts.');return;}
         await LocalNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
         await PushNotifications.register();
-        setAlertsEnabled(true);
-        notify('Android notifications allowed. Registering this device with Firebase…');
-      }catch(error){console.warn('Hupera Android notification permission failed',error);setPushPermission('registration_failed');notify('Could not enable Android notifications. Check app notification permission in Android settings.');}
+        setAlertsEnabled(false);
+        setPushPermission('granted');
+        notify('Permission allowed. Waiting for Firebase device registration…');
+      }catch(error){const reason=error instanceof Error?error.message:String(error);console.warn('Hupera Android notification permission failed',error);setPushError(reason);setPushPermission('registration_failed');setAlertsEnabled(false);notify('Could not start Firebase registration: '+reason.slice(0,100));}
       return;
     }
     if(typeof Notification==='undefined'){setPushPermission('unsupported');notify('Notifications are not supported in this browser.');return;}
@@ -932,7 +942,7 @@ function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,e
         {section==='AI Workforce'&&<><p>Manage AI employees enabled for this workspace. Status is synced from your organisation.</p>{employees.length?employees.map((employee:any)=><div className="integration-state" key={employee.id}><Bot/><div><b>{employee.name||employee.employee_type||'AI employee'}</b><small>{employee.description||employee.employee_type||'Workspace AI employee'} · {employee.status||'Status unavailable'}</small></div></div>):<div className="empty-block">No AI employees are configured for this workspace yet.</div>}<div className="summary-line"><div><small>AI approval required</small><b>{preferences.ai_approval_required===false?'No':'Yes'}</b></div><input aria-label="AI approval required" type="checkbox" checked={preferences.ai_approval_required!==false} onChange={e=>setPreferences((old:any)=>({...old,ai_approval_required:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save AI preferences</button></>}
         {section==='Payments'&&<><p>Payment provider state is read from your workspace. Provider secrets are never displayed in the mobile app.</p>{(integrations.payments||[]).length?(integrations.payments||[]).map((item:any,i:number)=><div className="integration-state" key={i}><Wallet/><div><b>{item.provider||'Payment provider'} · {item.status||'Unknown'}</b><small>{item.updated_at?new Date(item.updated_at).toLocaleString('en-IN'):''}</small></div></div>):<div className="empty-block">No payment connection record was returned for this organisation.</div>}</>}
         {section==='Team & permissions'&&<><p>Current role for this authenticated workspace.</p><div className="summary-line"><div><small>Workspace role</small><b>{org.role||'Workspace member'}</b></div></div><div className="summary-line"><div><small>Business workspace</small><b>{org.name||'—'}</b></div></div><p>Team invitations and role changes require the organisation's team-management permission API, which is not exposed to this mobile session yet.</p></>}
-        {section==='Notifications'&&<><p>Enable native Firebase push alerts on this Android device. Notifications are delivered to the app, not through browser alerts.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> {alertsEnabled?'Re-register this device':'Enable device alerts'}</button><div className="summary-line"><div><small>Device permission</small><b>{nativePlatform?(pushPermission==='registered'?'Allowed · device registered':pushPermission==='granted'?'Allowed · registering':pushPermission==='denied'?'Blocked in Android settings':pushPermission==='registration_failed'?'Registration failed':pushPermission):typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b></div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
+        {section==='Notifications'&&<><p>Enable native Firebase push alerts on this Android device. Notifications are delivered to the app, not through browser alerts.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> {alertsEnabled?'Re-register this device':'Enable device alerts'}</button><div className="summary-line"><div><small>Device permission</small><b>{nativePlatform?(pushPermission==='registered'?'Allowed · device registered':pushPermission==='granted'?'Allowed · registering':pushPermission==='denied'?'Blocked in Android settings':pushPermission==='registration_failed'?'Registration failed':pushPermission):typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b>{!!pushError&&<small style={{color:'#dc2626',display:'block',marginTop:6,overflowWrap:'anywhere'}}>Details: {pushError}</small>}</div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
         {section==='Appearance'&&<><p>Choose the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button><div className="summary-line"><div><small>Compact mode</small><b>{preferences.compact_mode?'On':'Off'}</b></div><input type="checkbox" checked={!!preferences.compact_mode} onChange={e=>setPreferences((old:any)=>({...old,compact_mode:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save appearance preferences</button></>}
         {section==='Google Calendar'&&<><p>Calendar integration status for this workspace.</p><div className="integration-state"><CalendarCheck/><div><b>{integrations.calendar?.connected_email?'Connected':'Not connected'}</b><small>{integrations.calendar?.connected_email||'No Google Calendar account is connected.'}</small></div></div></>}
         {section==='Billing & support'&&<><p>Billing and subscription information is protected by the workspace account.</p><div className="empty-block">Billing details are not exposed through the mobile settings API. No external browser redirect is triggered.</div></>}
