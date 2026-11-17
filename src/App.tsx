@@ -123,9 +123,9 @@ function WorkspaceApp() {
     if(workspaceSyncBusy.current||document.hidden)return;
     workspaceSyncBusy.current=true;setDataError('');
     try{
-      const [dashboard,employees,appointments,inbox,reports,notifications]=await Promise.all([
+      const [dashboard,employees,appointments,inbox,notifications]=await Promise.all([
         getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
-        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:period.replace(' days','')}),getHuperaResource<any>('notifications')
+        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('notifications')
       ]);
       setUnreadNotifications(Number(notifications.unread_count||0));
       setNotifications(Array.isArray(notifications.notifications)?notifications.notifications:[]);
@@ -147,7 +147,7 @@ function WorkspaceApp() {
           format:b.location||b.booking_type||'—',amount:Number(b.amount||b.total_amount||0),
           payment:b.payment_status||'—',upi:'',transactionId:b.transaction_reference||undefined,messages:[]};
       });
-      setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports});
+      setWorkspace((old:any)=>({...old,dashboard,employees:employees.employees||[],appointments:bookings}));
       setChats(old=>mapped.map(chat=>{const previous=old.find(item=>item.id===chat.id);return previous?{...chat,messages:previous.messages,appointments:previous.appointments,payments:previous.payments}:chat;}));
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
@@ -484,18 +484,29 @@ function WorkspaceApp() {
     };
   },[tab,active.conversationId]);
 
-  // Keep inbox and unread counters fresh even if the realtime socket drops or the app resumes from background.
+  // Refresh workspace summaries at a measured interval; Ably events still trigger immediate updates.
   useEffect(()=>{
     const syncVisibleWorkspace=()=>{
       if(document.hidden)return;
       void refreshWorkspace();
-      if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
     };
-    const timer=window.setInterval(syncVisibleWorkspace,5000);
+    const timer=window.setInterval(syncVisibleWorkspace,30000);
     document.addEventListener('visibilitychange',syncVisibleWorkspace);
     return()=>{
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange',syncVisibleWorkspace);
+    };
+  },[tab]);
+
+  // Keep the selected conversation near-live even when the realtime socket is interrupted.
+  useEffect(()=>{
+    if(tab!=='Inbox'||!active.conversationId)return;
+    const syncActiveThread=()=>{if(!document.hidden)void refreshActiveThread();};
+    const timer=window.setInterval(syncActiveThread,5000);
+    document.addEventListener('visibilitychange',syncActiveThread);
+    return()=>{
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',syncActiveThread);
     };
   },[tab,active.conversationId]);
 
