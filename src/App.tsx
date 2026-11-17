@@ -704,6 +704,12 @@ function App() {
 
     const logout = async () => {
       await clearToken();
+      try {
+        localStorage.removeItem('hupera_mobile_access_token');
+        localStorage.removeItem('hupera_access_token');
+      } catch {
+        // Capacitor Preferences token is already cleared above.
+      }
 
       processingCode.current = false;
       callbackSucceeded.current = false;
