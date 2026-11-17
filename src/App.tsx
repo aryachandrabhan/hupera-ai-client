@@ -57,6 +57,10 @@ function WorkspaceApp() {
   const workspaceSyncBusy=useRef(false);
   const threadSyncBusy=useRef(false);
   const previousPriorityIds=useRef<Set<string>>(new Set());
+  const chatThreadRef=useRef<HTMLDivElement|null>(null);
+  const chatNearBottomRef=useRef(true);
+  const lastThreadSnapshotRef=useRef<{conversationId:string;messageId:string}|null>(null);
+  const [pendingChatMessages,setPendingChatMessages]=useState(0);
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
   const [availabilityItems,setAvailabilityItems]=useState<any[]>([]);
@@ -87,6 +91,57 @@ function WorkspaceApp() {
   const human=String(active.handlingMode||'AI').toLowerCase()==='human';
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
   const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.unreadCount||0),Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
+
+  useEffect(()=>{
+    chatNearBottomRef.current=true;
+    lastThreadSnapshotRef.current=null;
+    setPendingChatMessages(0);
+    const frame=window.requestAnimationFrame(()=>{
+      const thread=chatThreadRef.current;
+      if(thread)thread.scrollTop=thread.scrollHeight;
+    });
+    return()=>window.cancelAnimationFrame(frame);
+  },[active.conversationId]);
+
+  useEffect(()=>{
+    const messages=active.messages||[];
+    if(!active.conversationId||!messages.length)return;
+    const last=messages[messages.length-1];
+    const previous=lastThreadSnapshotRef.current;
+    if(previous?.conversationId===active.conversationId&&previous.messageId!==String(last.id||'')){
+      const previousIndex=messages.findIndex(message=>String(message.id||'')===previous.messageId);
+      const added=previousIndex>=0?messages.slice(previousIndex+1):[last];
+      const incoming=added.filter(message=>message.from==='customer').length;
+      if(chatNearBottomRef.current){
+        const frame=window.requestAnimationFrame(()=>{const thread=chatThreadRef.current;if(thread)thread.scrollTo({top:thread.scrollHeight,behavior:'smooth'});});
+        setPendingChatMessages(0);
+        lastThreadSnapshotRef.current={conversationId:active.conversationId,messageId:String(last.id||'')};
+        return()=>window.cancelAnimationFrame(frame);
+      }
+      if(incoming>0)setPendingChatMessages(count=>count+incoming);
+    }else if(!previous||previous.conversationId!==active.conversationId){
+      const frame=window.requestAnimationFrame(()=>{const thread=chatThreadRef.current;if(thread)thread.scrollTop=thread.scrollHeight;});
+      lastThreadSnapshotRef.current={conversationId:active.conversationId,messageId:String(last.id||'')};
+      return()=>window.cancelAnimationFrame(frame);
+    }
+    lastThreadSnapshotRef.current={conversationId:active.conversationId,messageId:String(last.id||'')};
+  },[active.conversationId,active.messages]);
+
+  const handleChatThreadScroll=()=>{
+    const thread=chatThreadRef.current;
+    if(!thread)return;
+    const atBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<72;
+    chatNearBottomRef.current=atBottom;
+    if(atBottom)setPendingChatMessages(0);
+  };
+
+  const jumpToLatestChatMessage=()=>{
+    const thread=chatThreadRef.current;
+    if(!thread)return;
+    chatNearBottomRef.current=true;
+    thread.scrollTo({top:thread.scrollHeight,behavior:'smooth'});
+    setPendingChatMessages(0);
+  };
 
   const notify=(s:string)=>{
     setToast(s);
@@ -313,6 +368,15 @@ function WorkspaceApp() {
           }
         });
         listeners.push(received);
+        const appStateListener=await CapacitorApp.addListener('appStateChange',async({isActive})=>{
+          if(!isActive||cancelled)return;
+          try{
+            const resumedPermission=await PushNotifications.checkPermissions();
+            setPushPermission(resumedPermission.receive);
+            if(resumedPermission.receive==='granted')await PushNotifications.register();
+          }catch(error){console.warn('Hupera push re-registration on app resume failed',error);setPushPermission('registration_failed');}
+        });
+        listeners.push(appStateListener);
         let permission=await PushNotifications.checkPermissions();
         setPushPermission(permission.receive);
         if(cancelled||permission.receive!=='granted')return;
@@ -639,7 +703,7 @@ function WorkspaceApp() {
               <section className="chat-detail">
                 <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'🤖 Resume AI Agent':'🤖 AI Active — Click to Take Over'}</button></div>
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent active'}</span></div>
-                <div className="chat-thread">{[
+                <div className="chat-thread" ref={chatThreadRef} onScroll={handleChatThreadScroll}>{[
                   ...(active.appointments||[]).map((item:any)=>({kind:'appointment',item,at:item.created_at||item.starts_at||''})),
                   ...(active.appointments||[]).filter((item:any)=>item.payment_confirmation_requested_at||['reported','awaiting_confirmation','declined'].includes(String(item.payment_status||'').toLowerCase())||!!item.payment_reference).map((item:any)=>({kind:'payment_review',item,at:item.payment_confirmation_requested_at||item.created_at||''})),
                   ...(active.payments||[]).map((item:any)=>({kind:'payment_order',item,at:item.created_at||''})),
@@ -676,8 +740,9 @@ function WorkspaceApp() {
                   if(m.type==='payment_confirmation')return <div key={m.id||entry.index} className="message-wrap customer"><article className="appointment-request payment-request-card priority-action-card"><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation request</b></div><p>{m.text}</p><small className="message-time">{m.time}</small></article></div>;
                   return <div key={m.id||entry.index} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}><small className="sender">{m.from==='customer'?'Customer':m.from==='ai'?'Hupera AI':m.from==='human'?'Team member':'System update'}</small>{m.text}<small className="message-time">{m.time}</small></div></div>;
                 })}</div>
+                {pendingChatMessages>0&&<button type="button" className="chat-jump-button" onClick={jumpToLatestChatMessage} aria-label={'Jump to latest message, '+pendingChatMessages+' new messages'}><ChevronDown size={19}/><span>{pendingChatMessages>99?'99+':pendingChatMessages}</span></button>}
                 <div className="chat-quick-actions"><small>Messages are sent through the connected channel. AI automation is {human?'paused for this chat':'active for this chat'}.</small></div>
-                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
+                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()} onClick={()=>{chatNearBottomRef.current=true;setPendingChatMessages(0);}}><Send size={17}/></button></form>
               </section>
             </section>
           </>}
