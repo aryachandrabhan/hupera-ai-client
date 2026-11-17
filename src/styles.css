@@ -340,3 +340,137 @@ button {
   .report-data-panel .section-title { align-items: flex-start; gap: 8px; }
   .report-data-panel .section-title .outline-button { white-space: nowrap; }
 }
+
+
+/* Hupera mobile production polish */
+.day-card {
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  margin-bottom: 20px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, .045);
+}
+.schedule-list { gap: 0 !important; }
+.schedule-block {
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px;
+  background: #F8FAFC;
+  margin-top: 14px;
+  padding: 13px;
+}
+.schedule-block .block-grid { padding-bottom: 2px; }
+.chat-detail { min-height: 0; display: flex; flex-direction: column; }
+.chat-detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #fff;
+  border-bottom: 1px solid #E8EDF4;
+}
+.chat-thread {
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+.appointment-request {
+  width: min(100%, 520px);
+  border: 1px solid #DCE5F0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: 0 5px 16px rgba(15,23,42,.045);
+}
+.payment-request-card { border-color: #D8E5F5; background: #FBFDFF; }
+.appointment-actions { gap: 8px; }
+.appointment-actions button { min-height: 38px; }
+.action-audit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid #B9E5CF;
+  border-radius: 9px;
+  background: #F0FDF4;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}
+.chat-history-head {
+  position: sticky;
+  top: 58px;
+  z-index: 3;
+  background: #fff;
+  padding: 10px 0;
+}
+.report-export-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.report-export-actions button { white-space:nowrap; }
+.settings-detail label input { min-height: 40px; }
+.settings-detail input[type="checkbox"] { width: 18px; height: 18px; accent-color: #2868c7; }
+@media (max-width: 650px) {
+  .inbox-panel.mobile-chat-open {
+    position: fixed;
+    inset: 58px 0 calc(66px + env(safe-area-inset-bottom)) 0;
+    z-index: 12;
+    display: flex !important;
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    overflow: hidden;
+  }
+  .inbox-panel.mobile-chat-open .inbox-list { display:none !important; }
+  .inbox-panel.mobile-chat-open .chat-detail {
+    display:flex !important;
+    flex:1 1 auto;
+    width:100%;
+    height:100%;
+    min-height:0;
+    max-height:none;
+    padding:0 13px 12px;
+    overflow:hidden;
+  }
+  .inbox-panel.mobile-chat-open .chat-detail-head {
+    position:sticky;
+    top:0;
+    flex:0 0 auto;
+    padding:10px 0;
+  }
+  .inbox-panel.mobile-chat-open .chat-history-head { top:0; }
+  .inbox-panel.mobile-chat-open .chat-thread {
+    flex:1 1 auto;
+    min-height:0;
+    max-height:none;
+    overflow-y:auto;
+    padding:12px 5px;
+  }
+  .inbox-panel.mobile-chat-open .reply-box {
+    flex:0 0 auto;
+    margin-top:10px;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom));
+  }
+  .mobile-chat-back { display:inline-flex !important; width:100%; }
+  .chat-detail-head .chat-person { flex:1 1 65%; }
+  .chat-detail-head > .outline-button { width:100%; }
+  .appointment-request { width:100%; max-width:100%; }
+  .appointment-actions { flex-wrap:wrap; }
+  .appointment-actions button { flex:1 1 30%; }
+  .schedule-block { margin-top:12px; padding:11px; }
+  .day-card { margin-bottom:20px !important; }
+  .report-export-actions { width:100%; }
+}
+@media print {
+  .sidebar,.topbar,.mobile-nav,.demo-strip,.footer,.toast,.toolbar select,.report-export-actions { display:none !important; }
+  .main-area { margin:0 !important; padding:0 !important; }
+  .content { padding:0 !important; }
+  .panel,.panel-inner,.metric-card { break-inside:avoid; box-shadow:none !important; }
+  body { background:#fff !important; color:#111 !important; }
+}
