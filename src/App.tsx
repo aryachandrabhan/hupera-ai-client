@@ -790,6 +790,11 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   const sourceRows=Array.isArray(reports?.source_breakdown)?reports.source_breakdown:[];
   const departmentRows=Array.isArray(reports?.department_breakdown)?reports.department_breakdown:[];
   const dailyRows=Array.isArray(reports?.daily)?reports.daily:[];
+
+
+  const dailyMax=Math.max(1,...dailyRows.map((x:any)=>Number(x.received_messages||0)));
+  const dailyPoints=dailyRows.map((x:any,i:number)=>(dailyRows.length>1?40+i*(520/(dailyRows.length-1)):300)+','+(170-(Number(x.received_messages||0)/dailyMax)*130)).join(' ');
+  const aiHandled=Number(ai.total||0),humanHandled=humanResponses,aiReplyShare=aiHandled+humanHandled?Math.round(aiHandled/(aiHandled+humanHandled)*100):0;
   const exportSections:ReportExportSection[]=[
     {title:'Appointments & revenue',rows:rows.map(([label,value]:any)=>({label:String(label),value:String(String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):value)}))},
     {title:'Appointment status breakdown',rows:statusRows.map((item:any)=>({label:String(item.status||'unknown').replace(/_/g,' '),value:String(item.total??0)}))},
@@ -806,10 +811,6 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
     finally{setExporting('');}
   };
   const exportSuffix=period.replace(/\s+/g,'-');
-
-  const dailyMax=Math.max(1,...dailyRows.map((x:any)=>Number(x.received_messages||0)));
-  const dailyPoints=dailyRows.map((x:any,i:number)=>(dailyRows.length>1?40+i*(520/(dailyRows.length-1)):300)+','+(170-(Number(x.received_messages||0)/dailyMax)*130)).join(' ');
-  const aiHandled=Number(ai.total||0),humanHandled=humanResponses,aiReplyShare=aiHandled+humanHandled?Math.round(aiHandled/(aiHandled+humanHandled)*100):0;
   const donutColors:any={confirmed:'#16a34a',pending:'#f59e0b',cancelled:'#ef4444',no_show:'#7c3aed',completed:'#0d9488',rescheduled:'#3b82f6'};
   let donutCursor=0;
   const donutStops=statusRows.map((item:any)=>{const pct=Number(bookings.total||0)?Number(item.total||0)/Number(bookings.total)*100:0;const start=donutCursor;donutCursor+=pct;return (donutColors[String(item.status||'').toLowerCase()]||'#94a3b8')+' '+start+'% '+donutCursor+'%';}).join(',');
