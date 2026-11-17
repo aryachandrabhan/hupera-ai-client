@@ -383,10 +383,14 @@ function WorkspaceApp() {
         setPushPermission(permission.receive);
         if(permission.receive!=='granted'){setAlertsEnabled(false);notify('Allow notifications for Hupera in Android settings, then try again.');return;}
         await PushNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
+        let localPermission=await LocalNotifications.checkPermissions();
+        if(localPermission.display!=='granted')localPermission=await LocalNotifications.requestPermissions();
+        if(localPermission.display!=='granted'){setAlertsEnabled(false);notify('Android notification permission is required to show alerts.');return;}
+        await LocalNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
         await PushNotifications.register();
         setAlertsEnabled(true);
         notify('Android notifications allowed. Registering this device with Firebase…');
-      }catch(error){console.warn('Hupera Android notification permission failed',error);notify('Could not enable Android notifications. Check app notification permission in Android settings.');}
+      }catch(error){console.warn('Hupera Android notification permission failed',error);setPushPermission('registration_failed');notify('Could not enable Android notifications. Check app notification permission in Android settings.');}
       return;
     }
     if(typeof Notification==='undefined'){setPushPermission('unsupported');notify('Notifications are not supported in this browser.');return;}
