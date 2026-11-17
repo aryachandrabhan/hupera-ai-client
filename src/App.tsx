@@ -463,8 +463,9 @@ function WorkspaceApp() {
         channel.subscribe((message:any)=>{
           if(disposed)return;
           const eventName=String(message?.name||'');
-          if(!['message.created','conversation.updated','appointment.created','appointment.updated','payment.updated'].includes(eventName))return;
+          if(!['message.created','conversation.updated','appointment.created','appointment.updated','payment.updated','availability.updated'].includes(eventName))return;
           void refreshWorkspace();
+          if(eventName==='availability.updated'&&tab==='Appointment')void loadAvailability();
           if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
         });
         realtime.connection.on('connected',()=>{if(!disposed){setDataError('');void refreshWorkspace();if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();}});
@@ -497,6 +498,18 @@ function WorkspaceApp() {
       document.removeEventListener('visibilitychange',syncVisibleWorkspace);
     };
   },[tab,active.conversationId]);
+
+  // Keep appointment availability in sync with website-side schedule edits.
+  useEffect(()=>{
+    if(tab!=='Appointment')return;
+    const syncAvailability=()=>{if(!document.hidden)void loadAvailability();};
+    const timer=window.setInterval(syncAvailability,15000);
+    document.addEventListener('visibilitychange',syncAvailability);
+    return()=>{
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',syncAvailability);
+    };
+  },[tab]);
 
   const updateBookingStatus=async(bookingId:string,status:'confirmed'|'cancelled'|'rescheduled')=>{
     if(!bookingId){notify('This request is not linked to a booking record.');return;}
