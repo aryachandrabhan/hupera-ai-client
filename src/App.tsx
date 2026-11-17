@@ -1021,6 +1021,7 @@ function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,e
         return;
       }
       if(!order?.payment_session_id||!order?.order_id)throw new Error(order?.error||'Cashfree did not return a valid payment session.');
+      await onRefreshPayment(order.order_id);
       const sdk=await loadCashfreeSdk();
       const cashfree=sdk({mode:order.environment==='production'?'production':'sandbox'});
       const checkout=await cashfree.checkout({paymentSessionId:order.payment_session_id,redirectTarget:'_self'});
@@ -1057,7 +1058,7 @@ function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,e
           {paymentNotice&&<div className="cashfree-notice" role="status">{paymentNotice}</div>}
           {paymentError&&<div className="cashfree-error" role="alert">{paymentError}</div>}
           <button type="button" className="primary-button cashfree-pay-button" disabled={paymentBusy||!paymentData?.configured||paymentData?.subscription?.owner_entitlement||paymentData?.subscription?.status==='active'} onClick={()=>void startCashfreePayment()}>{paymentBusy?'Preparing secure checkout…':paymentData?.subscription?.status==='active'?'Subscription active':'Pay securely with Cashfree'}</button>
-          <button type="button" className="outline-button cashfree-refresh-button" disabled={paymentBusy} onClick={()=>void onRefreshPayment().catch(error=>setPaymentError(error instanceof Error?error.message:'Unable to refresh payment status.'))}><RefreshCw size={14}/> Refresh payment status</button>
+          <button type="button" className="outline-button cashfree-refresh-button" disabled={paymentBusy} onClick={()=>void onRefreshPayment(paymentData?.payments?.find((item:any)=>String(item.status||'').toLowerCase()!=='paid')?.order_id).catch(error=>setPaymentError(error instanceof Error?error.message:'Unable to refresh payment status.'))}><RefreshCw size={14}/> Refresh payment status</button>
           {!paymentData?.configured&&!paymentData?.subscription?.owner_entitlement&&<small className="cashfree-help">Cashfree merchant setup is not complete yet. Payments will be enabled when the gateway is configured.</small>}
           <div className="cashfree-methods"><span>UPI</span><span>Cards</span><span>Netbanking</span><span>Wallets*</span></div>
           <small className="cashfree-help">*Available payment methods depend on your Cashfree merchant configuration and customer eligibility.</small>
