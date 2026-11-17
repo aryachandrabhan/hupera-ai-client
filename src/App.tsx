@@ -123,7 +123,7 @@ function WorkspaceApp() {
           payment:b.payment_status||'—',upi:'',transactionId:b.transaction_reference||undefined,messages:[]};
       });
       setWorkspace({dashboard,employees:employees.employees||[],appointments:bookings,reports});
-      setChats(mapped);
+      setChats(old=>mapped.map(chat=>{const previous=old.find(item=>item.id===chat.id);return previous?{...chat,messages:previous.messages,appointments:previous.appointments,payments:previous.payments}:chat;}));
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
