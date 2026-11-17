@@ -759,7 +759,7 @@ function WorkspaceApp() {
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} nativePlatform={Capacitor.isNativePlatform()}/> }
+          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} pushError={pushError} nativePlatform={Capacitor.isNativePlatform()}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
@@ -921,7 +921,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   </section>;
 }
 
-function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave,alertsEnabled,pushPermission,nativePlatform}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void;alertsEnabled:boolean;pushPermission:string;nativePlatform:boolean}) {
+function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave,alertsEnabled,pushPermission,pushError,nativePlatform}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void;alertsEnabled:boolean;pushPermission:string;pushError:string;nativePlatform:boolean}) {
   const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Payment connection status'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status'],['Billing & support','Plan and account']];
   const org=settingsData?.organization||{},prefs=settingsData?.preferences||{},integrations=settingsData?.integrations||{};
   const [draft,setDraft]=useState<any>({});
