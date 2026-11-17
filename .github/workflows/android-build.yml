@@ -1,4 +1,3 @@
-
 name: Build Hupera Android APK
 
 on:
@@ -30,16 +29,39 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Inject Firebase Android configuration
+      - name: Inject and validate Firebase Android configuration
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
-            echo "Firebase Android configuration installed."
-          else
-            echo "::warning::GOOGLE_SERVICES_JSON secret is not set. APK will compile, but FCM registration will not work until Firebase config is added."
+          set -euo pipefail
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON repository secret is missing or unavailable to this workflow."
+            exit 1
           fi
+
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("android/app/google-services.json")
+          data = json.loads(path.read_text())
+          project_id = data.get("project_info", {}).get("project_id")
+          clients = data.get("client", [])
+          expected = "com.hupera.ai.client"
+          matches = [
+              c.get("client_info", {}).get("android_client_info", {}).get("package_name")
+              for c in clients
+          ]
+
+          assert project_id, "Firebase project_id is missing"
+          assert expected in matches, (
+              f"Firebase config does not contain Android package {expected}. "
+              f"Found: {matches}"
+          )
+          print("SUCCESS: Firebase JSON is valid and package name matches.")
+          PY
 
       - name: Install dependencies
         run: npm install
