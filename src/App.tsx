@@ -501,13 +501,14 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
 }
 
 function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
-  const bookings=reports?.appointments||{},messages=reports?.messages||{},revenue=reports?.revenue||{},customers=reports?.customers||{},conversations=reports?.conversations||{},ai=reports?.ai_responses||{},conversions=reports?.conversions||{};
+  const bookings=reports?.appointments||{},messages=reports?.messages||{},revenue=reports?.revenue||{},customers=reports?.customers||{},conversations=reports?.conversations||{},ai=reports?.ai_responses||{},conversions=reports?.conversions||{},leads=reports?.leads||{};
   const currency=reports?.currency||'INR';
   const money=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(Number.isFinite(Number(v))?Number(v):0);
   const humanResponses=Number(messages.human_replies??Math.max(0,Number(messages.sent||0)-Number(ai.total||0)));
-  const conversionRate=Number(conversations.total||0)?(Number(conversions.total||0)/Number(conversations.total||0))*100:0;
+  const conversionRate=Number(leads.total||0)?(Number(conversions.total||0)/Number(leads.total||0))*100:0;
+  const aiShare=Number(ai.total||0)+humanResponses?Number(ai.total||0)/(Number(ai.total||0)+humanResponses)*100:0;
   const rows=[
-    ['Period (days)',reports?.period_days??period],['Appointments',bookings.total??0],['Pending appointments',bookings.pending??0],['Confirmed appointments',bookings.confirmed??0],['Cancelled appointments',bookings.cancelled??0],['Completed appointments',bookings.completed??0],['Upcoming appointments',bookings.upcoming??0],['Customers',customers.total??0],['Conversations',conversations.total??0],['Converted leads',conversions.total??0],['Conversion rate (%)',conversionRate.toFixed(1)],['Revenue collected',revenue.collected_value??0],['Booked value',revenue.booked_value??0],['Customer messages',messages.received??0],['AI responses',ai.total??0],['Human / staff responses',humanResponses]
+    ['Period (days)',reports?.period_days??period],['Appointments',bookings.total??0],['Pending appointments',bookings.pending??0],['Confirmed appointments',bookings.confirmed??0],['Cancelled appointments',bookings.cancelled??0],['Completed appointments',bookings.completed??0],['Upcoming appointments',bookings.upcoming??0],['Customers',customers.total??0],['Conversations',conversations.total??0],['Leads',leads.total??0],['Converted leads',conversions.total??0],['Lead conversion rate (%)',conversionRate.toFixed(1)],['Revenue collected',revenue.collected_value??0],['Booked value',revenue.booked_value??0],['Customer messages',messages.received??0],['AI responses',ai.total??0],['Human / staff responses',humanResponses],['AI share of staff responses (%)',aiShare.toFixed(1)]
   ];
   const exportCsv=()=>{
     if(!reports)return;
@@ -523,7 +524,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
       <div className="stats-grid report-metrics">
         <Metric icon={CalendarCheck} label="Appointments" value={String(bookings.total??0)} change="Live" detail={period}/>
         <Metric icon={Users} label="Customers" value={String(customers.total??0)} change="Live" detail="workspace total"/>
-        <Metric icon={TrendingUp} label="Conversion rate" value={conversionRate.toFixed(1)+'%'} change="Live" detail="converted leads / conversations"/>
+        <Metric icon={TrendingUp} label="Conversion rate" value={conversionRate.toFixed(1)+'%'} change="Live" detail="converted leads / new leads"/>
         <Metric icon={Bot} label="AI responses" value={String(ai.total??0)} change="Live" detail="AI sent messages"/>
         <Metric icon={MessageCircle} label="Human responses" value={String(humanResponses)} change="Live" detail="staff sent messages"/>
       </div>
