@@ -363,7 +363,25 @@ function WorkspaceApp() {
     return ()=>{cancelled=true;};
   },[active.conversationId,tab]);
 
-  const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');};
+  const enableAlerts=async()=>{
+    if(Capacitor.isNativePlatform()){
+      try{
+        let permission=await PushNotifications.checkPermissions();
+        if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
+        if(permission.receive!=='granted'){notify('Allow notifications for Hupera in Android settings, then try again.');return;}
+        await PushNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
+        await PushNotifications.register();
+        setAlertsEnabled(true);
+        notify('Android push notifications enabled for this device.');
+      }catch(error){console.warn('Hupera Android notification permission failed',error);notify('Could not enable Android notifications. Check app notification permission in Android settings.');}
+      return;
+    }
+    if(typeof Notification==='undefined'){notify('Notifications are not supported in this browser.');return;}
+    const permission=await Notification.requestPermission();
+    setAlertsEnabled(permission==='granted');
+    if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}
+    notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');
+  };
 
   const refreshActiveThread=async()=>{
     if(!active.conversationId)return;
