@@ -15,26 +15,13 @@ import './styles.css';
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {from:'customer'|'ai'|'human'|'system';text:string;time:string;type?:string};
 type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;needsAction:boolean;priorityType?:string;unreadCount:number;appointments:any[];payments:any[];initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
-type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number};
+type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number;resourceId:string;serviceId:string};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
 
 const initialChats:Chat[]=[];
 
-const mk=(id:number,department:string,doctors:string[],from:string,to:string,fee=500):Block=>({id,department,doctors,from,to,fee});
-
-const initialDays:Day[]=[
-{name:'Monday',enabled:true,blocks:[mk(1,'Anaesthesiology',['Dr. Aarav Malhotra','Dr. Aditi Saxena'],'09:00 AM','01:00 PM')]},
-{name:'Tuesday',enabled:true,blocks:[mk(2,'Nephrology',['Dr. Dev Malhotra','Dr. Diya Mukherjee'],'09:00 AM','01:00 PM'),mk(3,'Radiology',['Dr. Ankur Bahl','Dr. Arvind Kumar Khurana'],'02:00 PM','05:00 PM')]},
-{name:'Wednesday',enabled:true,blocks:[mk(4,'Gastroenterology and Gastrointestinal Surgery',['Dr. Nisha Iyer','Dr. Pooja Menon'],'09:00 AM','01:00 PM'),mk(5,'Internal Medicine',['Dr. Sneha Pillai','Dr. Tanvi Shah'],'02:00 PM','05:00 PM')]},
-{name:'Thursday',enabled:true,blocks:[mk(6,'Urology',['Dr. Vihaan Khanna','Dr. Yash Agarwal'],'09:00 AM','01:00 PM'),mk(7,'Paediatrics',['Dr. Ananya Desai','Dr. Anil Kumar Anand'],'02:00 PM','05:00 PM')]},
-{name:'Friday',enabled:true,blocks:[mk(8,'Neurology and Neurosurgery',['Dr. Balkar Singh','Dr. Biswajyoti Hazarika'],'09:00 AM','01:00 PM',1000),mk(9,'Obstetrics and Gynaecology',['Dr. Manav Gupta','Dr. Meera Nair'],'02:00 PM','05:00 PM')]},
-{name:'Saturday',enabled:true,blocks:[mk(10,'Neurology and Neurosurgery',['Dr. Aarav Malhotra','Dr. Aditi Saxena'],'09:00 AM','01:00 PM',1000),mk(11,'Obstetrics and Gynaecology',['Dr. Pooja Menon','Dr. Priya Nambiar'],'02:00 PM','05:00 PM')]},
-{name:'Sunday',enabled:false,blocks:[]}
-];
-
-const departments=['Anaesthesiology','Cardiology','Nephrology','Radiology','Gastroenterology and Gastrointestinal Surgery','Internal Medicine','Urology','Paediatrics','Neurology and Neurosurgery','Obstetrics and Gynaecology','General Medicine','Orthopaedics','Dermatology'];
-
-const doctors=['Dr. Aarav Malhotra','Dr. Aditi Saxena','Dr. Dev Malhotra','Dr. Diya Mukherjee','Dr. Ankur Bahl','Dr. Arvind Kumar Khurana','Dr. Nisha Iyer','Dr. Pooja Menon','Dr. Sneha Pillai','Dr. Tanvi Shah','Dr. Vihaan Khanna','Dr. Yash Agarwal','Dr. Ananya Desai','Dr. Anil Kumar Anand','Dr. Balkar Singh','Dr. Biswajyoti Hazarika','Dr. Manav Gupta','Dr. Meera Nair','Dr. Priya Nambiar','Dr. Arvind Mehta'];
+const dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const initialDays:Day[]=dayNames.map(name=>({name,enabled:false,blocks:[]}));
 
 function Trend({down=false}:{down?:boolean}) {
   return <svg className={'trend '+(down?'down':'')} viewBox="0 0 72 28"><polyline points={down?'0,5 12,9 24,7 36,16 48,13 60,21 72,24':'0,23 12,18 24,20 36,11 48,14 60,6 72,2'} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/><path d={down?'M0 5 L12 9 L24 7 L36 16 L48 13 L60 21 L72 24 L72 28 L0 28Z':'M0 23 L12 18 L24 20 L36 11 L48 14 L60 6 L72 2 L72 28 L0 28Z'} fill="currentColor" opacity=".1"/></svg>;
@@ -64,13 +51,18 @@ function WorkspaceApp() {
   const previousPriorityIds=useRef<Set<string>>(new Set());
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
+  const [availabilityItems,setAvailabilityItems]=useState<any[]>([]);
+  const [availabilitySettings,setAvailabilitySettings]=useState<any>({});
+  const [settingsData,setSettingsData]=useState<any>(null);
+  const [settingsSaving,setSettingsSaving]=useState(false);
+  const [timezone,setTimezone]=useState('Asia/Kolkata');
   const [slot,setSlot]=useState('30');
   const [buffer,setBuffer]=useState('15');
-  const [service,setService]=useState('Hospital Consultation');
+  const [service,setService]=useState('');
   const [format,setFormat]=useState('Phone / WhatsApp consultation');
-  const [location,setLocation]=useState('Near Vastral Metro Station Ahmedabad');
-  const [phone,setPhone]=useState('6264324981');
-  const [email,setEmail]=useState('aryachandrabhan145@gmail.com');
+  const [location,setLocation]=useState('');
+  const [phone,setPhone]=useState('');
+  const [email,setEmail]=useState('');
   const [showPreview,setShowPreview]=useState(false);
   const [period,setPeriod]=useState('7 days');
   const [settings,setSettings]=useState('Business profile');
@@ -103,9 +95,7 @@ function WorkspaceApp() {
     }
   };
 
-  const handleLogout=()=>{
-  window.dispatchEvent(new Event('hupera-logout'));
-};
+  const handleLogout=()=>{ window.dispatchEvent(new Event('hupera-logout')); };
 
 
   const refreshWorkspace=async()=>{
@@ -143,7 +133,90 @@ function WorkspaceApp() {
     finally{setDataLoading(false);}
   };
 
+
+  const loadAvailability=async()=>{
+    try{
+      const data=await getHuperaResource<any>('availability');
+      const schedules=Array.isArray(data.schedules)?data.schedules:[];
+      const mapped:Day[]=dayNames.map((name,index)=>{
+        const rows=schedules.filter((x:any)=>Number(x.day_of_week)===index+1);
+        return {name,enabled:rows.length>0,blocks:rows.map((x:any,i:number)=>({
+          id:Number(String(x.id||'').replace(/\\D/g,''))||Date.now()+index*100+i,
+          department:String(x.service_name||''),doctors:x.person_name?[String(x.person_name)]:[],
+          from:time12(String(x.start_time||'09:00').slice(0,5)),
+          to:time12(String(x.end_time||'13:00').slice(0,5)),
+          fee:Number(x.fee??x.service_price??0),resourceId:String(x.resource_id||''),serviceId:String(x.service_id||'')
+        }))};
+      });
+      setDays(mapped);
+      setAvailabilityItems(Array.isArray(data.items)?data.items:[]);
+      const settings=data.settings||{};
+      setAvailabilitySettings(settings);
+      setSlot(String(settings.default_slot_duration_minutes||30));
+      setBuffer(String(settings.default_buffer_minutes||0));
+      setTimezone(String(settings.timezone||'Asia/Kolkata'));
+      setService(String(settings.service_title||'Consultation'));
+      setFormat(String(settings.meeting_format||'Phone / WhatsApp consultation'));
+      setLocation(String(settings.location||''));
+      setPhone(String(settings.host_notification_phone||''));
+      setEmail(String(settings.host_notification_email||''));
+    }catch(e){setDataError(e instanceof Error?e.message:'Unable to load saved availability.');}
+  };
+
+  const saveAvailability=async()=>{
+    const schedules=days.flatMap((day,index)=>day.enabled?day.blocks.map(block=>({
+      day_of_week:index+1,start_time:time24(block.from),end_time:time24(block.to),
+      resource_id:block.resourceId,service_id:block.serviceId,fee:block.fee,
+      slot_duration_minutes:Number(slot),buffer_minutes:Number(buffer)
+    })):[]);
+    if(schedules.some((x:any)=>!x.resource_id||!x.service_id)){notify('Choose a saved department and assigned person for every working block.');return;}
+    try{
+      await postHuperaAction('schedule_save',{
+        schedules,timezone,industry:workspace.dashboard?.organization?.industry||'other',
+        service_title:service,meeting_format:format,location,
+        host_notification_phone:phone,host_notification_email:email,
+        default_slot_duration_minutes:Number(slot),default_buffer_minutes:Number(buffer),
+        allow_sunday_bookings:days[6]?.enabled===true
+      });
+      notify('Availability saved to your workspace.');
+      await loadAvailability();
+    }catch(e){notify(e instanceof Error?e.message:'Could not save availability.');}
+  };
+
+  const loadSettings=async()=>{
+    try{const data=await getHuperaResource<any>('settings');setSettingsData(data);}
+    catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace settings.');}
+  };
+
+  const saveSettings=async(organization:any,preferences:any)=>{
+    setSettingsSaving(true);
+    try{
+      const data=await postHuperaAction<any>('settings_save',{organization,preferences});
+      setSettingsData((old:any)=>({...old,organization:data.organization,preferences:data.settings}));
+      notify('Workspace settings saved.');
+      await refreshWorkspace();
+    }catch(e){notify(e instanceof Error?e.message:'Could not save settings.');}
+    finally{setSettingsSaving(false);}
+  };
+
+
+  useEffect(()=>{
+    let listener:{remove:()=>Promise<void>}|null=null;
+    let active=true;
+    void CapacitorApp.addListener('backButton',({canGoBack})=>{
+      if(!active)return;
+      if(tab==='Inbox'&&mobileChatOpen){setMobileChatOpen(false);return;}
+      if(tab==='Settings'&&settings!=='Business profile'){setSettings('Business profile');return;}
+      if(tab!=='Home'){setTab('Home');setMobileChatOpen(false);return;}
+      if(canGoBack){window.history.back();return;}
+      void CapacitorApp.exitApp();
+    }).then(value=>{listener=value;if(!active)void value.remove();});
+    return()=>{active=false;if(listener)void listener.remove();};
+  },[tab,mobileChatOpen,settings]);
+
   useEffect(()=>{void refreshWorkspace();},[]);
+
+  useEffect(()=>{if(tab==='Appointment')void loadAvailability();if(tab==='Settings')void loadSettings();},[tab]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -154,7 +227,7 @@ function WorkspaceApp() {
   },[period]);
 
 
-  useEffect(()=>{if(tab!=='Inbox')return;const timer=window.setInterval(()=>{void refreshWorkspace();},5000);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
+  useEffect(()=>{const timer=window.setInterval(()=>{void refreshWorkspace();},2500);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
 
   useEffect(()=>{
     if(!active.conversationId||tab!=='Inbox')return;
@@ -162,8 +235,8 @@ function WorkspaceApp() {
     const loadThread=()=>getHuperaResource<any>('thread',{conversation_id:active.conversationId}).then((data)=>{
       if(cancelled)return;
       const messages=(data.messages||[]).map((m:any)=>({
-        from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
-        text:String(m.content||''),type:String(m.message_type||'text'),time:m.created_at?new Date(m.created_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
+        id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
+        text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
       } as Msg));
       setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
     }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
@@ -174,34 +247,58 @@ function WorkspaceApp() {
 
   const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');};
 
-  const paymentReceived=()=>notify('Payment verification must be confirmed by the connected payment provider webhook.');
-
-  const confirm=async()=>{
-    if(!active.bookingId){notify('No linked appointment is available to confirm.');return;}
-    try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'confirmed'});notify('Appointment confirmed.');await refreshWorkspace();}
-    catch(e){notify(e instanceof Error?e.message:'Could not confirm appointment.');}
+  const refreshActiveThread=async()=>{
+    if(!active.conversationId)return;
+    const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});
+    const messages=(data.messages||[]).map((m:any)=>({
+      id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
+      text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,
+      createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
+    } as Msg));
+    setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
   };
 
-  // Payment status is sourced from the verified payment webhook, never simulated.
-
-  const reschedule=async()=>{
-    if(!active.bookingId){notify('No linked appointment is available to reschedule.');return;}
-    const v=window.prompt('Enter new date and time (YYYY-MM-DDTHH:mm):');
-    if(v){const date=new Date(v);if(Number.isNaN(date.getTime())){notify('Enter a valid date and time.');return;}
-      try{await postHuperaAction('booking_reschedule',{booking_id:active.bookingId,starts_at:date.toISOString()});notify('Reschedule submitted.');await refreshWorkspace();}
-      catch(e){notify(e instanceof Error?e.message:'Could not reschedule appointment.');}}
+  const updateBookingStatus=async(bookingId:string,status:'confirmed'|'cancelled'|'rescheduled')=>{
+    if(!bookingId){notify('This request is not linked to a booking record.');return;}
+    let startsAt:string|undefined;
+    if(status==='rescheduled'){
+      const value=window.prompt('Enter the new date and time (YYYY-MM-DDTHH:mm)');
+      if(!value)return;
+      const parsed=new Date(value);
+      if(!Number.isFinite(parsed.getTime())||parsed<=new Date()){notify('Choose a valid future date and time.');return;}
+      startsAt=parsed.toISOString();
+    }
+    if(status==='cancelled'&&!window.confirm('Cancel this appointment?'))return;
+    try{
+      await postHuperaAction('booking_status',{booking_id:bookingId,status,...(startsAt?{starts_at:startsAt}:{})});
+      notify('Appointment '+status+'.');
+      await refreshWorkspace();
+      await refreshActiveThread();
+    }catch(e){notify(e instanceof Error?e.message:'Could not update appointment.');}
   };
 
-  const cancel=async()=>{
-    if(!active.bookingId){notify('No linked appointment is available to cancel.');return;}
-    if(window.confirm('Cancel this appointment?')){try{await postHuperaAction('booking_status',{booking_id:active.bookingId,status:'cancelled'});notify('Appointment cancelled.');await refreshWorkspace();}
-      catch(e){notify(e instanceof Error?e.message:'Could not cancel appointment.');}}
+  const reviewPayment=async(bookingId:string,decision:'received'|'not_received')=>{
+    if(!bookingId){notify('This payment request is not linked to a booking.');return;}
+    const note=decision==='not_received'?(window.prompt('Optional reason (for audit history):')||''):'';
+    try{
+      await postHuperaAction('payment_review',{booking_id:bookingId,decision,note});
+      notify(decision==='received'?'Payment marked as received.':'Payment marked as not received.');
+      await refreshWorkspace();
+      await refreshActiveThread();
+    }catch(e){notify(e instanceof Error?e.message:'Could not review payment.');}
   };
+
+  const confirm=()=>updateBookingStatus(active.bookingId||'','confirmed');
+  const reschedule=()=>updateBookingStatus(active.bookingId||'','rescheduled');
+  const cancel=()=>updateBookingStatus(active.bookingId||'','cancelled');
 
   const updateDay=(i:number,p:Partial<Day>)=>setDays(old=>old.map((d,n)=>n===i?{...d,...p}:d));
   const updateBlock=(di:number,id:number,p:Partial<Block>)=>setDays(old=>old.map((d,i)=>i===di?{...d,blocks:d.blocks.map(b=>b.id===id?{...b,...p}:b)}:d));
 
   const nav=[['Home',Home],['Inbox',MessageCircle],['Appointment',CalendarDays],['Reports',Activity],['Settings',Settings]] as const;
+  const businessName=String(workspace.dashboard?.organization?.name||'').trim();
+  const hour=new Date().getHours();
+  const greeting=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
 
   return (
     <div className={`app-shell ${theme==='dark'?'dark-theme':''}`}>
@@ -217,14 +314,14 @@ function WorkspaceApp() {
         <header className="topbar">
           <div className="mobile-brand"><div className="brand-mark"><Bot size={20}/></div><b>Hupera <span>AI</span></b></div>
           <div className="top-actions">
-            <button className="icon-btn" onClick={()=>notify('Demo notifications only.')} aria-label="Notifications"><Bell size={18}/></button>
+            <button className="icon-btn" onClick={()=>setTab('Inbox')} aria-label="Open inbox notifications"><Bell size={18}/></button>
             <button className="icon-btn" onClick={toggleTheme} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} title={theme==='light'?'Dark mode':'Light mode'}>
               {theme==='light'?<Moon size={19}/>:<Sun size={19}/>}
             </button>
             <button className="outline-button" onClick={handleLogout} title="Authentication must be connected for real logout">
               <LogOut size={16}/> Logout
             </button>
-            <div className="profile"><div className="profile-avatar">FA</div><div><b>Fortis Admin</b><small>ADMINISTRATOR</small></div></div>
+            <div className="profile"><div className="profile-avatar">{(businessName||'H').slice(0,1).toUpperCase()}</div><div><b>{businessName||'Hupera workspace'}</b><small>AUTHENTICATED WORKSPACE</small></div></div>
           </div>
         </header>
 
@@ -232,10 +329,10 @@ function WorkspaceApp() {
           <div className="page-heading">
             <div>
               <div className="eyebrow">{workspace.dashboard?.organization?.name||'HUPERA WORKSPACE'} <span>/</span> {tab.toUpperCase()}</div>
-              <h1>{tab==='Home'?'Good morning!':tab==='Appointment'?'Availability & hours':tab==='Inbox'?'AI Inbox & WhatsApp Chats':tab==='Reports'?'Reports & analytics':'Settings'}</h1>
+              <h1>{tab==='Home'?greeting+(businessName?', '+businessName:''):tab==='Appointment'?'Availability & hours':tab==='Inbox'?'AI Inbox & WhatsApp Chats':tab==='Reports'?'Reports & analytics':'Settings'}</h1>
               <p>{tab==='Home'?'Here’s what’s happening with your business today.':tab==='Appointment'?'Set timing defaults once, then define one or more working blocks for each day.':tab==='Inbox'?'Complete appointment details, chat history & manual payment verification':tab==='Reports'?'Track appointments, revenue, customers and AI performance.':'Manage your hospital workspace and connected services.'}</p>
             </div>
-            {tab==='Home'&&<button className="date-chip"><CalendarDays size={15}/> Today, Nov 15, 2026 <ChevronDown size={14}/></button>}
+            {tab==='Home'&&<div className="date-chip"><CalendarDays size={15}/> {new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>}
           </div>
 
           <div className="demo-strip"><span className="demo-indicator"/><div><b>{dataLoading?'Loading workspace':'Live workspace data'}</b><span>{dataError||'Showing information from your signed-in Hupera organization.'}</span></div><button className="outline-button" onClick={()=>void refreshWorkspace()} disabled={dataLoading}>Refresh</button></div>
@@ -243,17 +340,16 @@ function WorkspaceApp() {
           {tab==='Home'&&<>
             <div className="section-title"><h2>Today at a glance</h2><button onClick={()=>setTab('Reports')}>View reports <ArrowUpRight size={14}/></button></div>
             <div className="stats-grid">
-              <Metric icon={CalendarDays} label="Today's appointments" value={String(workspace.dashboard?.today_appointments?.total??workspace.dashboard?.today_appointments?.count??0)} change="Live" detail="today"/>
+              <Metric icon={CalendarDays} label="Today's appointments" value={String(workspace.dashboard?.today_appointments?.total??0)} change="Live" detail="today"/>
               <Metric icon={Clock3} label="Appointment pending" value={String(workspace.dashboard?.counts?.pending_appointments??0)} change="Live" detail="pending appointments"/>
-              <Metric icon={CalendarCheck} label="Requested" value={String(workspace.dashboard?.counts?.appointments??0)} change="Live" detail="total appointments"/>
-              <Metric icon={MessageCircle} label="Conversations" value={String(workspace.dashboard?.counts?.conversations??0)} change="Live" detail="conversations"/>
-              <Metric icon={Wallet} label="Revenue collected" value={workspace.reports?.currency?new Intl.NumberFormat('en-IN',{style:'currency',currency:workspace.reports.currency,maximumFractionDigits:0}).format(Number(workspace.reports.revenue||0)):String(workspace.reports?.revenue??'—')} change="Live" detail="reported revenue"/>
+              <Metric icon={CalendarCheck} label="Appointments" value={String(workspace.dashboard?.counts?.appointments??0)} change="Live" detail="workspace total"/>
+              <Metric icon={MessageCircle} label="Conversations" value={String(workspace.dashboard?.counts?.conversations??0)} change="Live" detail="workspace total"/>
             </div>
             <div className="home-grid">
               <section className="panel">
-                <div className="section-title inside"><h2><Bot size={17}/> Your AI workforce</h2><span className="status-pill">● 3 active</span></div>
-                <p className="muted-copy">Your AI team is handling routine work while your staff focuses on patient care.</p>
-                {[['Reception Assistant','Appointments & enquiries'],['Customer Support','WhatsApp conversations'],['Follow-up Assistant','Reminders & follow-ups']].map(([a,b])=><div className="agent-row" key={a}><span className="agent-icon"><Bot size={17}/></span><span className="agent-info"><b>{a}</b><small>{b}</small></span><span className="agent-status">● Active</span></div>)}
+                <div className="section-title inside"><h2><Bot size={17}/> Your AI workforce</h2><span className="status-pill">{workspace.employees.filter((x:any)=>String(x.status).toLowerCase()==='active').length} active</span></div>
+                <p className="muted-copy">AI employees configured in this organisation.</p>
+                {workspace.employees.length?workspace.employees.map((employee:any)=><div className="agent-row" key={employee.id}><span className="agent-icon"><Bot size={17}/></span><span className="agent-info"><b>{employee.name}</b><small>{employee.description||employee.employee_type||'AI employee'}</small></span><span className="agent-status">● {employee.status||'Unknown'}</span></div>):<p className="muted-copy">No AI employees are configured in this workspace.</p>}
                 <button className="outline-button full" onClick={()=>setTab('Settings')}>Manage AI workforce <ArrowUpRight size={14}/></button>
               </section>
               <section className="panel">
@@ -262,8 +358,9 @@ function WorkspaceApp() {
               </section>
             </div>
             <section className="panel activity-panel">
-              <div className="section-title inside"><h2>Recent activity</h2><small>Latest workspace updates</small></div>
-              {[['Payment needs verification','Priya Sharma · ₹1,200 · UPI','10:42 AM'],['Appointment confirmed','Aman Joshi · Calendar demo sync','Yesterday'],['New appointment request','Anya Pandey · Dermatology','Nov 14']].map(([a,b,c])=><button className="activity-row" key={a} onClick={()=>setTab('Inbox')}><span className="activity-icon"><Activity size={17}/></span><span className="activity-text"><b>{a}</b><small>{b}</small></span><time>{c}</time></button>)}
+              <div className="section-title inside"><h2>Recent activity</h2><small>Workspace audit events</small></div>
+              {(workspace.dashboard?.recent_activity||[]).map((event:any)=><div className="activity-row" key={event.id}><span className="activity-icon"><Activity size={17}/></span><span className="activity-text"><b>{String(event.action||'Workspace update').replace(/[._]/g,' ')}</b><small>{event.resource_type||'Workspace'} · {event.resource_id||''}</small></span><time>{event.created_at?new Date(event.created_at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):''}</time></div>)}
+              {!workspace.dashboard?.recent_activity?.length&&<p className="muted-copy">No recent activity recorded.</p>}
             </section>
           </>}
 
@@ -276,7 +373,7 @@ function WorkspaceApp() {
                 {filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}
               </aside>
               <section className="chat-detail">
-                <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI Agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'Resume AI Agent':'Take Over Chat from AI Agent'}</button></div>
+                <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'🤖 Resume AI Agent':'🤖 AI Active — Click to Take Over'}</button></div>
                 <div className="appointment-summary">
                   <div className="summary-heading"><div><span className="eyebrow">APPOINTMENT DETAILS</span><h3>{active.name}</h3></div><span className={'status-badge '+(active.status==='Confirmed & Synced'?'ok':active.status==='Payment Paid - Verify'?'warning':'neutral')}>{active.status}</span></div>
                   <div className="appointment-facts">
@@ -296,17 +393,34 @@ function WorkspaceApp() {
                     <button className="danger-button" onClick={cancel}><X size={15}/> Cancel</button>
                   </div>
                 </div>
-                <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent'}</span></div>
-                <div className="chat-thread">{(active.appointments||[]).map((b:any)=><div className="appointment-request" key={'appointment-'+b.id}><div className="request-heading"><CalendarCheck size={17}/><b>Appointment {String(b.status||'requested').replace(/_/g,' ')}</b></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div></div>)}{(active.payments||[]).map((p:any)=><div className="appointment-request payment-request-card" key={'payment-'+p.id}><div className="request-heading"><CreditCard size={17}/><b>Payment {String(p.status||'pending').replace(/_/g,' ')}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:p.currency||'INR'}).format(Number(p.amount||0))}</b></div><div className="request-details"><span>Payment type</span><b>{p.payment_kind||'Appointment payment'}</b></div><div className="request-details"><span>Provider</span><b>{p.provider||'—'}</b></div>{p.payment_link_url&&<p><a href={p.payment_link_url} target="_blank" rel="noreferrer">Open payment link</a></p>}</div>)}{(active.appointments||[]).filter((b:any)=>b.payment_confirmation_requested_at||String(b.payment_status||'').toLowerCase()==='pending').map((b:any)=><div className="appointment-request payment-request-card" key={'payment-request-'+b.id}><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation requested</b></div><div className="request-details"><span>Booking</span><b>{b.reference_code||b.title||'Appointment'}</b></div><div className="request-details"><span>Payment status</span><b>{b.payment_status||'Pending verification'}</b></div><div className="request-details"><span>Reference / UTR</span><b>{b.payment_reference||'Not supplied'}</b></div></div>)}{active.messages.map((m,i)=>m.type==='appointment_request'?<div key={i} className="message-wrap customer"><div className="appointment-request"><div className="request-heading"><CalendarCheck size={17}/><b>New appointment request</b></div><p>{m.text}</p><small className="message-time">{m.time}</small></div></div>:m.type==='payment_confirmation'?<div key={i} className="message-wrap customer"><div className="appointment-request payment-request-card"><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation request</b></div><p>{m.text}</p><small className="message-time">{m.time}</small></div></div>:<div key={i} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}>{m.from!=='customer'&&<small className="sender">{m.from==='ai'?'Hupera AI':m.from==='human'?'Team member':'System update'}</small>}{m.text}<small className="message-time">{m.time}</small></div></div>)}</div>
+                <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent active'}</span></div>
+                <div className="chat-thread">{[
+                  ...(active.appointments||[]).map((item:any)=>({kind:'appointment',item,at:item.created_at||item.starts_at||''})),
+                  ...(active.payments||[]).map((item:any)=>({kind:'payment_order',item,at:item.created_at||''})),
+                  ...(active.messages||[]).map((item:any,index:number)=>({kind:'message',item,index,at:item.createdAt||item.time||''}))
+                ].sort((a:any,b:any)=>new Date(a.at||0).getTime()-new Date(b.at||0).getTime()).map((entry:any)=>{
+                  if(entry.kind==='appointment'){
+                    const b=entry.item;const status=String(b.status||'pending').toLowerCase();const locked=['confirmed','cancelled','completed','deleted'].includes(status);
+                    return <div className="message-wrap system" key={'appointment-'+b.id}><article className="appointment-request"><div className="request-heading"><CalendarCheck size={17}/><b>Appointment request</b><span className={'status-badge '+(status==='confirmed'?'ok':'neutral')}>{status.replace(/_/g,' ')}</span></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div>{locked?<div className="action-audit"><CheckCircle2 size={14}/> {status==='confirmed'?'Confirmed':status==='cancelled'?'Cancelled':status==='completed'?'Completed':'Closed'} · {b.updated_at?new Date(b.updated_at).toLocaleString('en-IN'):'Saved in workspace'}</div>:<div className="appointment-actions"><button className="primary-button" onClick={()=>void updateBookingStatus(String(b.id),'confirmed')}><Check size={14}/> Confirm</button><button className="outline-button" onClick={()=>void updateBookingStatus(String(b.id),'rescheduled')}><RefreshCw size={14}/> Reschedule</button><button className="danger-button" onClick={()=>void updateBookingStatus(String(b.id),'cancelled')}><X size={14}/> Cancel</button></div>}</article></div>;
+                  }
+                  if(entry.kind==='payment_order'){
+                    const p=entry.item;const booking=(active.appointments||[]).find((x:any)=>x.id===p.booking_id);const paid=String(booking?.payment_status||p.status||'').toLowerCase()==='paid';
+                    return <div className="message-wrap system" key={'payment-order-'+p.id}><article className="appointment-request payment-request-card"><div className="request-heading"><CreditCard size={17}/><b>Payment request</b><span className={'status-badge '+(paid?'ok':'neutral')}>{paid?'received':String(p.status||'pending')}</span></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:p.currency||'INR'}).format(Number(p.amount||0))}</b></div><div className="request-details"><span>Payment type</span><b>{p.payment_kind||'Appointment payment'}</b></div><div className="request-details"><span>Provider</span><b>{p.provider||'—'}</b></div>{p.payment_link_url&&<p><a href={p.payment_link_url} target="_blank" rel="noreferrer">Open payment link</a></p>}{booking&&!paid&&<div className="appointment-actions"><button className="primary-button" onClick={()=>void reviewPayment(String(booking.id),'received')}>Receive Payment</button><button className="danger-button" onClick={()=>void reviewPayment(String(booking.id),'not_received')}>Payment Not Received</button></div>}</article></div>;
+                  }
+                  const m=entry.item;
+                  if(m.type==='appointment_request')return <div key={m.id||entry.index} className="message-wrap customer"><article className="appointment-request"><div className="request-heading"><CalendarCheck size={17}/><b>New appointment request</b></div><p>{m.text}</p><small className="message-time">{m.time}</small></article></div>;
+                  if(m.type==='payment_confirmation')return <div key={m.id||entry.index} className="message-wrap customer"><article className="appointment-request payment-request-card"><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation request</b></div><p>{m.text}</p><small className="message-time">{m.time}</small></article></div>;
+                  return <div key={m.id||entry.index} className={'message-wrap '+m.from}><div className={'message '+(m.from==='customer'?'received':m.from==='system'?'system-message':'sent')}><small className="sender">{m.from==='customer'?'Customer':m.from==='ai'?'Hupera AI':m.from==='human'?'Team member':'System update'}</small>{m.text}<small className="message-time">{m.time}</small></div></div>;
+                })}</div>
                 <div className="chat-quick-actions"><small>Messages are sent through the connected channel. AI automation is {human?'paused for this chat':'active for this chat'}.</small></div>
-                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),type:String(m.message_type||'text'),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
+                <form className="reply-box" onSubmit={async e=>{e.preventDefault();if(!reply.trim()||!active.conversationId)return;try{await postHuperaAction('reply',{conversation_id:active.conversationId,message:reply.trim()});setReply('');notify('Message sent.');const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});const messages=(data.messages||[]).map((m:any)=>({id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''} as Msg));setChats(old=>old.map(c=>c.id===active.id?{...c,messages}:c));}catch(err){notify(err instanceof Error?err.message:'Message could not be sent.');}}}><input value={reply} onChange={e=>setReply(e.target.value)} placeholder={human?'Type a message as human agent...':'Type a message to customer...'}/><button aria-label="Send message" disabled={!reply.trim()}><Send size={17}/></button></form>
               </section>
             </section>
           </>}
 
-          {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify}/>}
+          {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} dashboard={workspace.dashboard} employees={workspace.employees}/> }
+          {tab==='Settings'&&<SettingsPage section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
@@ -319,54 +433,52 @@ function WorkspaceApp() {
 }
 
 function AppointmentPage(p:any) {
-  const {days,setDays,updateDay,updateBlock,slot,setSlot,buffer,setBuffer,service,setService,format,setFormat,location,setLocation,phone,setPhone,email,setEmail,showPreview,setShowPreview,notify}=p;
+  const {days,setDays,updateDay,updateBlock,items,slot,setSlot,buffer,setBuffer,timezone,setTimezone,service,setService,format,setFormat,location,setLocation,phone,setPhone,email,setEmail,showPreview,setShowPreview,notify,onSave}=p;
   const [copy,setCopy]=useState<Record<number,string>>({});
+  const services=(items||[]).filter((x:any)=>x.kind==='service'&&x.active!==false);
+  const people=(items||[]).filter((x:any)=>x.kind==='person'&&x.active!==false);
   const copyTo=(from:number,to:number)=>{
     setDays((old:Day[])=>old.map((d,i)=>i===to?{...d,enabled:old[from].enabled,blocks:old[from].blocks.map(b=>({...b,id:Date.now()+Math.random(),doctors:[...b.doctors]}))}:d));
     notify(days[from].name+' schedule copied to '+days[to].name+'.');
   };
-
+  const addBlock=(day:Day)=>{
+    setDays((old:Day[])=>old.map(d=>d.name===day.name?{...d,blocks:[...d.blocks,{id:Date.now()+Math.random(),department:'',doctors:[],from:'09:00 AM',to:'01:00 PM',fee:0,resourceId:'',serviceId:''}]}:d));
+  };
   return <section className="appointment-page">
     <div className="panel config-panel">
-      <div className="section-title inside"><div><h2>Availability defaults</h2><p>Set timing defaults once, then define one or more working blocks for each day.</p></div><span className="status-pill">Asia/Kolkata · UTC+5:30</span></div>
+      <div className="section-title inside"><div><h2>Availability defaults</h2><p>These settings are saved to this organisation and shared with the website booking flow.</p></div><span className="status-pill">{timezone}</span></div>
       <div className="settings-grid">
-        <label>Default slot duration<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label>
-        <label>Buffer between meetings<select value={buffer} onChange={e=>setBuffer(e.target.value)}><option value="0">No buffer</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option></select></label>
-        <label>Timezone<input value="Asia/Kolkata · UTC+5:30" readOnly/></label>
-        <label>Booking / service title<input value={service} onChange={e=>setService(e.target.value)}/></label>
+        <label>Default slot duration<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label>
+        <label>Buffer between meetings<select value={buffer} onChange={e=>setBuffer(e.target.value)}><option value="0">No buffer</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
+        <label>Timezone<input value={timezone} onChange={e=>setTimezone(e.target.value)}/></label>
+        <label>Booking / service title<input value={service} onChange={e=>setService(e.target.value)} placeholder="Consultation"/></label>
         <label>Meeting format<select value={format} onChange={e=>setFormat(e.target.value)}><option>Phone / WhatsApp consultation</option><option>In-person visit</option><option>Video consultation</option><option>Phone call</option></select></label>
-        <label>Location / meeting point<input value={location} onChange={e=>setLocation(e.target.value)}/></label>
-        <label>Host phone (+91 India)<input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+91 India · enter up to 10 digits"/></label>
-        <label>Notification email<input type="email" value={email} onChange={e=>setEmail(e.target.value)}/></label>
+        <label>Location / meeting point<input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Business address or meeting point"/></label>
+        <label>Host notification phone<input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Business contact number"/></label>
+        <label>Notification email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Business notification email"/></label>
       </div>
     </div>
-
-    <div className="section-title schedule-heading"><div><h2>Weekly schedule</h2><p>Switch days on or off. Add separate blocks for lunch breaks or split shifts.</p></div><button className="outline-button" onClick={()=>days.slice(1,6).forEach((_:Day,i:number)=>copyTo(0,i+1))}>Apply Monday’s hours to all weekdays</button></div>
-
+    <div className="section-title schedule-heading"><div><h2>Weekly schedule</h2><p>Each day and each working shift is shown in its own card.</p></div><button className="outline-button" onClick={()=>days.slice(1,6).forEach((_:Day,i:number)=>copyTo(0,i+1))}>Copy Monday to weekdays</button></div>
     <div className="schedule-list">{days.map((day:Day,di:number)=><section className={'panel day-card '+(!day.enabled?'day-disabled':'')} key={day.name}>
       <div className="day-head"><div className="day-title"><button className={'toggle '+(day.enabled?'on':'')} onClick={()=>updateDay(di,{enabled:!day.enabled})}><span/></button><div><h3>{day.name}</h3><small>{day.enabled?day.blocks.length+' working block(s)':'Unavailable'}</small></div></div>
-        <div className="day-controls">
-          <button className="text-button" onClick={()=>updateDay(di,{blocks:[...day.blocks,mk(Date.now(),'Cardiology',['Dr. Arvind Mehta'],'09:00 AM','01:00 PM')]})}><Plus size={15}/> Add time block and assign person</button>
-          <select value={copy[di]||''} onChange={e=>{setCopy(v=>({...v,[di]:e.target.value}));if(e.target.value!=='')copyTo(di,Number(e.target.value))}}><option value="">Copy to…</option>{days.map((d:Day,i:number)=>i!==di&&<option key={d.name} value={i}>{d.name}</option>)}</select>
-        </div>
+        <div className="day-controls"><button className="text-button" onClick={()=>addBlock(day)}><Plus size={15}/> Add working block</button><select value={copy[di]||''} onChange={e=>{setCopy(v=>({...v,[di]:e.target.value}));if(e.target.value!=='')copyTo(di,Number(e.target.value))}}><option value="">Copy to…</option>{days.map((d:Day,i:number)=>i!==di&&<option key={d.name} value={i}>{d.name}</option>)}</select></div>
       </div>
       {day.enabled&&day.blocks.map((b:Block)=><div className="schedule-block" key={b.id}>
-        <div className="block-top"><span className="block-label">WORKING BLOCK</span><button className="plain-icon" onClick={()=>updateDay(di,{blocks:day.blocks.filter(x=>x.id!==b.id)})}><X size={16}/></button></div>
+        <div className="block-top"><span className="block-label">WORKING SHIFT</span><button className="plain-icon" onClick={()=>updateDay(di,{blocks:day.blocks.filter(x=>x.id!==b.id)})}><X size={16}/></button></div>
         <div className="block-grid">
-          <label className="wide-field">Department<select value={b.department} onChange={e=>updateBlock(di,b.id,{department:e.target.value})}>{departments.map(d=><option key={d}>{d}</option>)}</select></label>
-          <div className="wide-field"><span className="field-label">Assign people ({b.doctors.length} selected)</span><div className="doctor-chips">{b.doctors.map(d=><span className="doctor-chip" key={d}>{d}<button onClick={()=>updateBlock(di,b.id,{doctors:b.doctors.filter(x=>x!==d)})}><X size={12}/></button></span>)}</div><select className="add-doctor" value="" onChange={e=>{if(e.target.value&&!b.doctors.includes(e.target.value))updateBlock(di,b.id,{doctors:[...b.doctors,e.target.value]})}}><option value="">+ Assign another person</option>{doctors.filter(d=>!b.doctors.includes(d)).map(d=><option key={d}>{d}</option>)}</select></div>
+          <label className="wide-field">Department / service<select value={b.serviceId} onChange={e=>{const item=services.find((x:any)=>x.id===e.target.value);updateBlock(di,b.id,{serviceId:e.target.value,department:item?.name||''});}}><option value="">Select from Business Info</option>{services.map((item:any)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="wide-field">Assigned person<select value={b.resourceId} onChange={e=>updateBlock(di,b.id,{resourceId:e.target.value,doctors:people.filter((x:any)=>x.id===e.target.value).map((x:any)=>x.name)})}><option value="">Select a team member</option>{people.map((person:any)=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
           <label>From<input type="time" value={time24(b.from)} onChange={e=>updateBlock(di,b.id,{from:time12(e.target.value)})}/></label>
           <label>To<input type="time" value={time24(b.to)} onChange={e=>updateBlock(di,b.id,{to:time12(e.target.value)})}/></label>
           <label>Fee (₹)<input type="number" min="0" value={b.fee} onChange={e=>updateBlock(di,b.id,{fee:Number(e.target.value)})}/></label>
         </div>
       </div>)}
-      {day.enabled&&day.blocks.length===0&&<div className="empty-block">No working blocks yet. Add a time block to make this day bookable.</div>}
-      {!day.enabled&&<div className="empty-block">This day is switched off and customers cannot book appointments.</div>}
+      {day.enabled&&day.blocks.length===0&&<div className="empty-block">No shifts saved for this day. Add a working block and select a real department and team member.</div>}
+      {!day.enabled&&<div className="empty-block">This day is switched off. Existing saved shifts remain unchanged until you save.</div>}
     </section>)}</div>
-
-    <div className="appointment-footer"><button className="outline-button" onClick={()=>setShowPreview(!showPreview)}><CalendarDays size={15}/>{showPreview?'Hide slot preview':'Preview available slots'}</button><button className="primary-button" onClick={()=>notify('Availability saved in this browser demo. Connect backend to publish to website and WhatsApp.')}><Check size={16}/> Save availability</button></div>
-
-    {showPreview&&<section className="panel preview-panel"><h2>Preview available slots</h2><p className="muted-copy">Illustrative slots account for the selected slot duration and buffer.</p>{days.filter((d:Day)=>d.enabled).map((d:Day)=><div className="preview-day" key={d.name}><b>{d.name}</b>{d.blocks.map((b:Block)=><div className="preview-block" key={b.id}><span>{b.department} · {b.doctors.join(', ')}</span><div>{slotsFor(b.from,b.to,Number(slot),Number(buffer)).map(t=><span className="slot-pill" key={t}>{t}</span>)}</div></div>)}</div>)}</section>}
+    {(!services.length||!people.length)&&<div className="empty-block">Add departments and assigned people in Business Info before creating a bookable shift. No sample staff have been inserted.</div>}
+    <div className="appointment-footer"><button className="outline-button" onClick={()=>setShowPreview(!showPreview)}><CalendarDays size={15}/>{showPreview?'Hide slot preview':'Preview available slots'}</button><button className="primary-button" onClick={()=>void onSave()}><Check size={16}/> Save availability</button></div>
+    {showPreview&&<section className="panel preview-panel"><h2>Available slot preview</h2><p className="muted-copy">Preview is calculated from the saved working shifts and selected duration.</p>{days.filter((d:Day)=>d.enabled).map((d:Day)=><div className="preview-day" key={d.name}><b>{d.name}</b>{d.blocks.map((b:Block)=><div className="preview-block" key={b.id}><span>{b.department||'Unassigned service'} · {b.doctors.join(', ')||'Unassigned person'}</span><div>{slotsFor(b.from,b.to,Number(slot),Number(buffer)).map(t=><span className="slot-pill" key={t}>{t}</span>)}</div></div>)}</div>)}</section>}
   </section>;
 }
 
@@ -394,68 +506,70 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
 }
 
 function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
-  const currency = reports?.currency || 'INR';
-  const money = (value:any) => new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(Number(value||0));
-  const exportReport = () => {
-    if (!reports) return;
-    const rows = [
-      ['Metric','Value'],
-      ['Period',period],
-      ['Appointments',reports.appointments ?? 0],
-      ['Customers',reports.customers ?? 0],
-      ['Revenue',reports.revenue ?? 0],
-      ['Currency',currency],
-      ['Conversations',reports.conversations ?? 0],
-      ['AI responses',reports.ai_responses ?? 0]
-    ];
-    const csv = rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
-    const url = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-    const link = document.createElement('a'); link.href=url; link.download='hupera-report-'+period.replace(/\\s+/g,'-')+'.csv'; link.click(); URL.revokeObjectURL(url);
+  const bookings=reports?.appointments||{},messages=reports?.messages||{},revenue=reports?.revenue||{},customers=reports?.customers||{},conversations=reports?.conversations||{},ai=reports?.ai_responses||{},conversions=reports?.conversions||{};
+  const currency=reports?.currency||'INR';
+  const money=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(Number.isFinite(Number(v))?Number(v):0);
+  const humanResponses=Math.max(0,Number(messages.sent||0)-Number(ai.total||0));
+  const conversionRate=Number(conversations.total||0)?(Number(conversions.total||0)/Number(conversations.total||0))*100:0;
+  const rows=[
+    ['Period (days)',reports?.period_days??period],['Appointments',bookings.total??0],['Pending appointments',bookings.pending??0],['Confirmed appointments',bookings.confirmed??0],['Cancelled appointments',bookings.cancelled??0],['Completed appointments',bookings.completed??0],['Upcoming appointments',bookings.upcoming??0],['Customers',customers.total??0],['Conversations',conversations.total??0],['Converted leads',conversions.total??0],['Conversion rate (%)',conversionRate.toFixed(1)],['Revenue collected',revenue.collected_value??0],['Booked value',revenue.booked_value??0],['Customer messages',messages.received??0],['AI responses',ai.total??0],['Human / staff responses',humanResponses]
+  ];
+  const exportCsv=()=>{
+    if(!reports)return;
+    const csv=[['Metric','Value'],...rows].map(row=>row.map(value=>'"'+String(value??'').replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    const link=document.createElement('a');link.href=url;link.download='hupera-report-'+period.replace(/\\s+/g,'-')+'.csv';link.click();URL.revokeObjectURL(url);
   };
+  const statusRows=Array.isArray(reports?.status_breakdown)?reports.status_breakdown:[];
+  const sourceRows=Array.isArray(reports?.source_breakdown)?reports.source_breakdown:[];
   return <section className="panel module-panel">
-    <div className="toolbar"><div><h2>Performance overview</h2><p>Verified totals returned by your Hupera workspace.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
-    {!reports ? <div className="empty-block">Report data is not available yet. Check your connection and refresh.</div> : <>
+    <div className="toolbar"><div><h2>Performance overview</h2><p>Metrics from this organisation's live database.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
+    {!reports?<div className="empty-block">Report data is not available. Check the connection and refresh.</div>:<>
       <div className="stats-grid report-metrics">
-        <Metric icon={CalendarCheck} label="Appointments" value={String(reports.appointments??0)} change="Workspace" detail={period}/>
-        <Metric icon={Users} label="Customers" value={String(reports.customers??0)} change="Workspace" detail={period}/>
-        <Metric icon={Wallet} label="Revenue" value={money(reports.revenue)} change="Workspace" detail={period}/>
-        <Metric icon={MessageCircle} label="Conversations" value={String(reports.conversations??0)} change="Workspace" detail={period}/>
-        <Metric icon={Activity} label="AI responses" value={String(reports.ai_responses??0)} change="Workspace" detail={period}/>
+        <Metric icon={CalendarCheck} label="Appointments" value={String(bookings.total??0)} change="Live" detail={period}/>
+        <Metric icon={Users} label="Customers" value={String(customers.total??0)} change="Live" detail="workspace total"/>
+        <Metric icon={TrendingUp} label="Conversion rate" value={conversionRate.toFixed(1)+'%'} change="Live" detail="converted leads / conversations"/>
+        <Metric icon={Bot} label="AI responses" value={String(ai.total??0)} change="Live" detail="AI sent messages"/>
+        <Metric icon={MessageCircle} label="Human responses" value={String(humanResponses)} change="Live" detail="staff sent messages"/>
       </div>
       <div className="panel-inner report-data-panel">
-        <div className="section-title inside"><div><h3>Report data</h3><p>Only values returned by the live reports API are shown.</p></div><button className="outline-button" onClick={exportReport}><Download size={14}/> Export CSV</button></div>
-        <div className="summary-line"><div><small>Selected reporting period</small><b>{period}</b></div></div>
-        <div className="summary-line"><div><small>Total appointments</small><b>{reports.appointments??0}</b></div></div>
-        <div className="summary-line"><div><small>Total customers</small><b>{reports.customers??0}</b></div></div>
-        <div className="summary-line"><div><small>Revenue collected</small><b>{money(reports.revenue)}</b></div></div>
-        <div className="summary-line"><div><small>Conversations</small><b>{reports.conversations??0}</b></div></div>
-        <div className="summary-line"><div><small>AI responses</small><b>{reports.ai_responses??0}</b></div></div>
+        <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><div className="report-export-actions"><button className="outline-button" onClick={exportCsv}><Download size={14}/> Export CSV</button><button className="outline-button" onClick={()=>window.print()}><FileText size={14}/> Save PDF</button></div></div>
+        {rows.map(([label,value])=><div className="summary-line" key={String(label)}><div><small>{label}</small><b>{String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):String(value)}</b></div></div>)}
+      </div>
+      <div className="report-grid" style={{marginTop:16}}>
+        <div className="panel-inner"><h3>Appointment status breakdown</h3>{statusRows.length?statusRows.map((item:any)=><div className="summary-line" key={item.status}><div><small>{String(item.status||'unknown').replace(/_/g,' ')}</small><b>{item.total}</b></div></div>):<p>No appointment status data for this period.</p>}</div>
+        <div className="panel-inner"><h3>Booking sources</h3>{sourceRows.length?sourceRows.map((item:any)=><div className="summary-line" key={item.source}><div><small>{item.source||'unknown'}</small><b>{item.total}</b></div></div>):<p>No booking source data for this period.</p>}</div>
       </div>
     </>}
   </section>;
 }
 
-function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlerts,dashboard,employees}:{section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;dashboard:any;employees:any[]}) {
-  const items=[['Business profile','Organization information'],['WhatsApp integration','Channel connection status'],['AI Workforce','Your active AI employees'],['Payments','Payment setup and verification'],['Team & permissions','Workspace access'],['Notifications','Device notification preferences'],['Appearance','Light and dark theme'],['Google Calendar','Calendar connection status'],['Billing & support','Subscription and help']];
-  const org=dashboard?.organization||{};
-  const openWorkspace=()=>{void Browser.open({url:'https://hupera-ai.hatchable.site'});};
+function SettingsPage({section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave}:{section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void}) {
+  const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Payment connection status'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status'],['Billing & support','Plan and account']];
+  const org=settingsData?.organization||{},prefs=settingsData?.preferences||{},integrations=settingsData?.integrations||{};
+  const [draft,setDraft]=useState<any>({});
+  const [preferences,setPreferences]=useState<any>({});
+  useEffect(()=>{setDraft({name:org.name||'',industry:org.industry||'',country:org.country||'',timezone:org.timezone||'Asia/Kolkata',currency:org.currency||'INR',website:org.website||'',description:org.description||'',notification_email:org.notification_email||'',business_phone:org.business_phone||''});setPreferences({...prefs});},[settingsData]);
+  const status=(value:any)=>value?.status||'Not connected';
   return <section className="panel module-panel">
-    <div className="toolbar"><div><h2>Workspace settings</h2><p>Choose a setting to view its current state and available action.</p></div></div>
+    <div className="toolbar"><div><h2>Workspace settings</h2><p>Settings are loaded from the authenticated organisation.</p></div></div>
     <div className="settings-layout">
       <div className="settings-menu">{items.map(([a,b])=><button type="button" className={section===a?'active':''} key={a} onClick={()=>setSection(a)}><span><b>{a}</b><small>{b}</small></span><ChevronRight size={15}/></button>)}</div>
       <div className="settings-detail">
-        <div className="settings-detail-icon"><Settings size={20}/></div>
-        <h3>{section}</h3>
-        {section==='Business profile'&&<><p>Organization details currently returned by your signed-in workspace.</p><div className="summary-line"><div><small>Business name</small><b>{org.name||'Not provided by workspace'}</b></div></div><div className="summary-line"><div><small>Organization ID</small><b>{org.id||'Not available'}</b></div></div><button className="outline-button" onClick={openWorkspace}>Open Hupera workspace</button></>}
-        {section==='WhatsApp integration'&&<><p>Manage the WhatsApp Business connection and webhook configuration in your Hupera workspace.</p><div className="integration-state"><MessageCircle/><div><b>Connection details are managed by the workspace</b><small>This mobile client does not expose Meta credentials or connection secrets.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open channel settings</button></>}
-        {section==='AI Workforce'&&<><p>AI employees available to this organization.</p>{employees.length?employees.map((employee:any,i:number)=><div className="summary-line" key={employee.id||employee.name||i}><div><small>AI employee</small><b>{employee.name||employee.title||employee.role||'AI employee'}</b></div><span>{employee.status||'Configured'}</span></div>):<div className="empty-block">No AI employee records were returned by the workspace.</div>}<button className="outline-button" onClick={openWorkspace}>Manage AI workforce</button></>}
-        {section==='Payments'&&<><p>Payment provider credentials and settlement settings are protected and managed in the web workspace.</p><div className="integration-state"><Wallet/><div><b>Provider configuration</b><small>Open the workspace to review Cashfree and payment settings.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open payment settings</button></>}
-        {section==='Team & permissions'&&<><p>Team membership and role changes are managed by workspace administrators.</p><button className="outline-button" onClick={openWorkspace}>Manage team access</button></>}
-        {section==='Notifications'&&<><p>Allow this device to show inbox notifications while Hupera is running.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> Enable device alerts</button><div className="summary-line"><div><small>Browser / device permission</small><b>{typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b></div></div><small>Background push notifications require Firebase Cloud Messaging setup and are not enabled by this setting.</small></>}
-        {section==='Appearance'&&<><p>Change the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button></>}
-        {section==='Google Calendar'&&<><p>Calendar authorization and synchronization are managed in the web workspace.</p><div className="integration-state"><CalendarCheck/><div><b>Connection status not exposed to mobile app</b><small>Open the workspace to connect or inspect Google Calendar.</small></div></div><button className="outline-button" onClick={openWorkspace}>Open calendar settings</button></>}
-        {section==='Billing & support'&&<><p>View subscription, invoices, plan limits and support options in Hupera.</p><button className="outline-button" onClick={openWorkspace}>Open billing & support</button></>}
-        <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}><h3 style={{marginTop:0}}>Account</h3><p>Sign out of this Hupera mobile session.</p><button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button></div>
+        <div className="settings-detail-icon"><Settings size={20}/></div><h3>{section}</h3>
+        {section==='Business profile'&&<><p>Edit business information saved to the signed-in organisation.</p>
+          {([['name','Business name'],['industry','Industry'],['country','Country'],['timezone','Timezone'],['currency','Currency'],['website','Website'],['description','Business description'],['notification_email','Notification email'],['business_phone','Business phone']] as const).map(([key,label])=><label key={key}>{label}<input value={draft[key]||''} onChange={e=>setDraft((old:any)=>({...old,[key]:e.target.value}))}/></label>)}
+          <button className="primary-button" disabled={saving||!settingsData} onClick={()=>onSave(draft,preferences)}>{saving?'Saving…':'Save business profile'}</button>
+        </>}
+        {section==='WhatsApp integration'&&<><p>WhatsApp credentials remain protected on the server. This view shows the live connection without exposing access tokens.</p><div className="integration-state"><MessageCircle/><div><b>{status(integrations.whatsapp)}</b><small>{integrations.whatsapp?.verified_name||integrations.whatsapp?.display_phone_number||'No connected WhatsApp sender is available.'}</small></div></div><div className="summary-line"><div><small>Last updated</small><b>{integrations.whatsapp?.updated_at?new Date(integrations.whatsapp.updated_at).toLocaleString('en-IN'):'—'}</b></div></div></>}
+        {section==='AI Workforce'&&<><p>AI workforce configuration is organisation-scoped.</p><div className="summary-line"><div><small>AI approval required</small><b>{preferences.ai_approval_required===false?'No':'Yes'}</b></div><input aria-label="AI approval required" type="checkbox" checked={preferences.ai_approval_required!==false} onChange={e=>setPreferences((old:any)=>({...old,ai_approval_required:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save AI preferences</button></>}
+        {section==='Payments'&&<><p>Payment provider state is read from your workspace. Provider secrets are never displayed in the mobile app.</p>{(integrations.payments||[]).length?(integrations.payments||[]).map((item:any,i:number)=><div className="integration-state" key={i}><Wallet/><div><b>{item.provider||'Payment provider'} · {item.status||'Unknown'}</b><small>{item.updated_at?new Date(item.updated_at).toLocaleString('en-IN'):''}</small></div></div>):<div className="empty-block">No payment connection record was returned for this organisation.</div>}</>}
+        {section==='Team & permissions'&&<><p>Current role for this authenticated workspace.</p><div className="summary-line"><div><small>Workspace role</small><b>{org.role||'Workspace member'}</b></div></div><div className="summary-line"><div><small>Business workspace</small><b>{org.name||'—'}</b></div></div><p>Team invitations and role changes require the organisation's team-management permission API, which is not exposed to this mobile session yet.</p></>}
+        {section==='Notifications'&&<><p>Enable foreground alerts on this device. Background push requires Firebase project configuration.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> Enable device alerts</button><div className="summary-line"><div><small>Device permission</small><b>{typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b></div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
+        {section==='Appearance'&&<><p>Choose the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button><div className="summary-line"><div><small>Compact mode</small><b>{preferences.compact_mode?'On':'Off'}</b></div><input type="checkbox" checked={!!preferences.compact_mode} onChange={e=>setPreferences((old:any)=>({...old,compact_mode:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save appearance preferences</button></>}
+        {section==='Google Calendar'&&<><p>Calendar integration status for this workspace.</p><div className="integration-state"><CalendarCheck/><div><b>{integrations.calendar?.connected_email?'Connected':'Not connected'}</b><small>{integrations.calendar?.connected_email||'No Google Calendar account is connected.'}</small></div></div></>}
+        {section==='Billing & support'&&<><p>Billing and subscription information is protected by the workspace account.</p><div className="empty-block">Billing details are not exposed through the mobile settings API. No external browser redirect is triggered.</div></>}
+        <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}><h3 style={{marginTop:0}}>Account</h3><p>Sign out and clear the Hupera mobile session.</p><button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button></div>
       </div>
     </div>
   </section>;
