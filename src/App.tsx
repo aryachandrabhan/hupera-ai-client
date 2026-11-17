@@ -267,16 +267,6 @@ function WorkspaceApp() {
           }
         });
         listeners.push(received);
-        const action=await PushNotifications.addListener('pushNotificationActionPerformed',event=>{
-          if(cancelled)return;
-          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:event?.notification?.data||{}}));
-        });
-        listeners.push(action);
-        const localAction=await LocalNotifications.addListener('localNotificationActionPerformed',event=>{
-          if(cancelled)return;
-          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:event?.notification?.extra||{}}));
-        });
-        listeners.push(localAction);
         let permission=await PushNotifications.checkPermissions();
         if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
         if(cancelled||permission.receive!=='granted')return;
@@ -323,6 +313,8 @@ function WorkspaceApp() {
       }
     };
     window.addEventListener('hupera:push-open',open);
+    const pending=(window as any).__huperaPendingPush;
+    if(pending){delete (window as any).__huperaPendingPush;open(new CustomEvent('hupera:push-open',{detail:pending}));}
     return()=>window.removeEventListener('hupera:push-open',open);
   },[]);
 
