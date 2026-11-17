@@ -1,12 +1,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+import { createPortal } from 'react-dom';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Badge } from '@capawesome/capacitor-badge';
 import { Browser } from '@capacitor/browser';
-import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction } from './huperaApi';
+import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction, getCashfreeSubscription, createCashfreeSubscriptionOrder } from './huperaApi';
 import {
   Activity, ArrowUpRight, Bell, Bot, CalendarCheck, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
@@ -27,6 +28,29 @@ const initialChats:Chat[]=[];
 
 const dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const initialDays:Day[]=dayNames.map(name=>({name,enabled:false,blocks:[]}));
+
+async function loadCashfreeSdk(): Promise<any> {
+  if ((window as any).Cashfree) return (window as any).Cashfree;
+  await new Promise<void>((resolve,reject)=>{
+    const existing=document.querySelector<HTMLScriptElement>('script[data-cashfree-sdk="true"]');
+    if(existing){
+      existing.addEventListener('load',()=>resolve(),{once:true});
+      existing.addEventListener('error',()=>reject(new Error('Cashfree checkout could not load.')),{once:true});
+      if((window as any).Cashfree)resolve();
+      return;
+    }
+    const script=document.createElement('script');
+    script.src='https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async=true;
+    script.dataset.cashfreeSdk='true';
+    script.onload=()=>resolve();
+    script.onerror=()=>reject(new Error('Cashfree checkout could not load. Check your internet connection.'));
+    document.head.appendChild(script);
+  });
+  if(!(window as any).Cashfree)throw new Error('Cashfree checkout SDK is unavailable.');
+  return (window as any).Cashfree;
+}
+
 
 function Trend({down=false}:{down?:boolean}) {
   return <svg className={'trend '+(down?'down':'')} viewBox="0 0 72 28"><polyline points={down?'0,5 12,9 24,7 36,16 48,13 60,21 72,24':'0,23 12,18 24,20 36,11 48,14 60,6 72,2'} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/><path d={down?'M0 5 L12 9 L24 7 L36 16 L48 13 L60 21 L72 24 L72 28 L0 28Z':'M0 23 L12 18 L24 20 L36 11 L48 14 L60 6 L72 2 L72 28 L0 28Z'} fill="currentColor" opacity=".1"/></svg>;
@@ -82,6 +106,7 @@ function WorkspaceApp() {
   const [showPreview,setShowPreview]=useState(false);
   const [period,setPeriod]=useState('7 days');
   const [settings,setSettings]=useState('Business profile');
+  const [cashfreePaymentData,setCashfreePaymentData]=useState<any>(null);
 
   // Theme preference is saved on this device/browser.
   const [theme,setTheme]=useState<'light'|'dark'>(() => {
@@ -152,6 +177,36 @@ function WorkspaceApp() {
     setToast(s);
     window.setTimeout(()=>setToast(''),2600);
   };
+
+  const refreshCashfreePayment=async(orderId?:string)=>{
+    const result=await getCashfreeSubscription(orderId);
+    setCashfreePaymentData(result);
+    if(result?.reconciliation?.paid)notify('Payment verified. Your Hupera AI subscription is active.');
+    return result;
+  };
+
+  useEffect(()=>{
+    if(tab==='Settings'&&settings==='Payments'){
+      void refreshCashfreePayment().catch(error=>notify(error instanceof Error?error.message:'Unable to load Cashfree payment status.'));
+    }
+  },[tab,settings]);
+
+  useEffect(()=>{
+    const onPaymentReturn=(event:Event)=>{
+      const orderId=String((event as CustomEvent).detail?.orderId||'');
+      setTab('Settings');
+      setSettings('Payments');
+      void refreshCashfreePayment(orderId||undefined).catch(error=>notify(error instanceof Error?error.message:'Payment status could not be verified yet.'));
+    };
+    window.addEventListener('hupera:cashfree-return',onPaymentReturn);
+    const pendingOrderId=String((window as any).__huperaPendingPaymentOrderId||'');
+    if(pendingOrderId){
+      delete (window as any).__huperaPendingPaymentOrderId;
+      onPaymentReturn(new CustomEvent('hupera:cashfree-return',{detail:{orderId:pendingOrderId}}));
+    }
+    return()=>window.removeEventListener('hupera:cashfree-return',onPaymentReturn);
+  },[]);
+
 
   const toggleTheme=()=>{
     const next=theme==='light'?'dark':'light';
@@ -755,7 +810,7 @@ function WorkspaceApp() {
                    if(entry.kind==='day-divider')return <div className="chat-day-divider" key={entry.key}><span>{entry.label}</span></div>;
                   if(entry.kind==='appointment'){
                     const b=entry.item;const status=String(b.status||'pending').toLowerCase();const locked=['confirmed','rescheduled','cancelled','completed','deleted'].includes(status);const bookingAudit=(active.messages||[]).filter((m:any)=>m.type==='appointment_status'&&m.metadata?.booking_id===b.id).slice(-1)[0];
-                    return <div className="message-wrap system" key={'appointment-'+b.id}><article className={'appointment-request '+(!locked?'priority-action-card':'')}><div className="request-heading"><CalendarCheck size={17}/><b>Appointment request</b><span className={'status-badge '+(status==='confirmed'?'ok':'neutral')}>{status.replace(/_/g,' ')}</span></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div>{locked?<div className="action-audit"><CheckCircle2 size={14}/> {status==='confirmed'?'Confirmed':status==='cancelled'?'Cancelled':status==='completed'?'Completed':'Closed'} · {bookingAudit?'Updated by '+String(bookingAudit.metadata?.actor_user_id||'workspace staff')+' · '+bookingAudit.time:(b.updated_at?new Date(b.updated_at).toLocaleString('en-IN'):'Saved in workspace')}</div>:<div className="appointment-actions"><button className="primary-button" onClick={()=>void updateBookingStatus(String(b.id),'confirmed')}><Check size={14}/> Confirm Booking</button><button className="outline-button" onClick={()=>void updateBookingStatus(String(b.id),'rescheduled')}><RefreshCw size={14}/> Reschedule</button><button className="danger-button" onClick={()=>void updateBookingStatus(String(b.id),'cancelled')}><X size={14}/> Cancel</button></div>}</article></div>;
+                    return <div className="message-wrap system" key={'appointment-'+b.id}><article className={'appointment-request '+(!locked?'priority-action-card':'')}><div className="request-heading"><CalendarCheck size={17}/><b>Appointment request</b><span className={'status-badge '+(status==='confirmed'?'ok':'neutral')}>{status.replace(/_/g,' ')}</span></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div>{locked?<div className="action-audit"><CheckCircle2 size={14}/> {status==='confirmed'?'Confirmed':status==='cancelled'?'Cancelled':status==='completed'?'Completed':'Closed'} · {bookingAudit?'Updated by '+String(bookingAudit.metadata?.actor_user_id||'workspace staff')+' · '+bookingAudit.time:(b.updated_at?new Date(b.updated_at).toLocaleString('en-IN'):'Saved in workspace')}</div>:<div className="appointment-actions"><button type="button" className="primary-button" onClick={()=>void updateBookingStatus(String(b.id),'confirmed')}><Check size={14}/> Confirm Booking</button><button type="button" className="outline-button" onClick={event=>{event.preventDefault();event.stopPropagation();void updateBookingStatus(String(b.id),'rescheduled');}}><RefreshCw size={14}/> Reschedule</button><button type="button" className="danger-button" onClick={()=>void updateBookingStatus(String(b.id),'cancelled')}><X size={14}/> Cancel</button></div>}</article></div>;
                   }
                   if(entry.kind==='payment_review'){
                     const b=entry.item;const paymentStatus=String(b.payment_status||'pending').toLowerCase();const settled=['paid','succeeded','completed'].includes(paymentStatus);const declined=paymentStatus==='declined';const paymentAudit=(active.messages||[]).filter((m:any)=>m.type==='payment_status'&&m.metadata?.booking_id===b.id).slice(-1)[0];
@@ -779,10 +834,10 @@ function WorkspaceApp() {
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} pushError={pushError} nativePlatform={Capacitor.isNativePlatform()}/> }
+          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} pushError={pushError} nativePlatform={Capacitor.isNativePlatform()} paymentData={cashfreePaymentData} onRefreshPayment={refreshCashfreePayment}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
-          {rescheduleBooking&&<div className="modal-backdrop" role="presentation" onClick={()=>!rescheduleSaving&&setRescheduleBooking(null)}><section className="reschedule-modal" role="dialog" aria-modal="true" aria-labelledby="reschedule-title" onClick={event=>event.stopPropagation()}><div className="reschedule-modal-head"><span className="reschedule-modal-icon"><CalendarDays size={20}/></span><div><h2 id="reschedule-title">Reschedule appointment</h2><p>Select a new appointment date and time.</p></div><button type="button" className="plain-icon" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving} aria-label="Close"><X size={19}/></button></div><label className="reschedule-field"><span><CalendarDays size={15}/> Appointment date</span><input type="date" value={rescheduleDate} min={new Date().toLocaleDateString('en-CA')} onChange={event=>setRescheduleDate(event.target.value)}/></label><label className="reschedule-field"><span><Clock3 size={15}/> Appointment time</span><input type="time" value={rescheduleTime} onChange={event=>setRescheduleTime(event.target.value)}/></label><div className="reschedule-modal-actions"><button type="button" className="outline-button" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving}>Cancel</button><button type="button" className="primary-button" onClick={()=>void submitReschedule()} disabled={rescheduleSaving||!rescheduleDate||!rescheduleTime}>{rescheduleSaving?'Saving…':'Confirm new time'}</button></div></section></div>}
+          {rescheduleBooking&&createPortal(<div className="modal-backdrop" role="presentation" onClick={()=>!rescheduleSaving&&setRescheduleBooking(null)}><section className="reschedule-modal" role="dialog" aria-modal="true" aria-labelledby="reschedule-title" onClick={event=>event.stopPropagation()}><div className="reschedule-modal-head"><span className="reschedule-modal-icon"><CalendarDays size={20}/></span><div><h2 id="reschedule-title">Reschedule appointment</h2><p>Select a new appointment date and time.</p></div><button type="button" className="plain-icon" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving} aria-label="Close"><X size={19}/></button></div><label className="reschedule-field"><span><CalendarDays size={15}/> Appointment date</span><input type="date" value={rescheduleDate} min={new Date().toLocaleDateString('en-CA')} onChange={event=>setRescheduleDate(event.target.value)}/></label><label className="reschedule-field"><span><Clock3 size={15}/> Appointment time</span><input type="time" value={rescheduleTime} onChange={event=>setRescheduleTime(event.target.value)}/></label><div className="reschedule-modal-actions"><button type="button" className="outline-button" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving}>Cancel</button><button type="button" className="primary-button" onClick={()=>void submitReschedule()} disabled={rescheduleSaving||!rescheduleDate||!rescheduleTime}>{rescheduleSaving?'Saving…':'Confirm new time'}</button></div></section></div>,document.body)}
         </main>
       </div>
 
@@ -923,32 +978,60 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
         <Metric icon={Bot} label="AI responses" value={String(ai.total??0)} change="Live" detail="AI sent messages"/>
         <Metric icon={MessageCircle} label="Human responses" value={String(humanResponses)} change="Live" detail="staff sent messages"/>
       </div>
+      <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>Appointment status</h3><p>Confirmed, pending, cancelled and completed</p></div><CalendarCheck size={18}/></div><div className="donut-layout"><div className="donut-ring" style={{background:donutStops?'conic-gradient('+donutStops+')':'#e8edf4'}}><div><b>{bookings.total||0}</b><small>Total</small></div></div><div className="donut-legend">{statusRows.map((item:any)=><div key={item.status}><i style={{background:donutColors[String(item.status||'').toLowerCase()]||'#94a3b8'}}/><span>{String(item.status||'Other').replace(/_/g,' ')}</span><b>{item.total}</b></div>)}</div></div></section>
+      <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>Department-wise patient flow</h3><p>Appointment volume by service / department</p></div><Stethoscope size={18}/></div>{departmentRows.length?departmentRows.map((item:any)=><div className="department-bar" key={item.department}><div><span>{item.department}</span><b>{item.total}</b></div><i><span style={{width:(Number(item.total||0)/Math.max(1,...departmentRows.map((x:any)=>Number(x.total||0)))*100)+'%'}}/></i></div>):<p>Department-level data is not available yet.</p>}</section>
       <div className="panel-inner report-data-panel">
         <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><details className="report-export-menu"><summary className="outline-button"><Download size={14}/> Export Report</summary><div className="report-export-options"><button type="button" disabled={!!exporting} onClick={()=>void runExport('PDF',()=>exportReportPdf('hupera-report-'+exportSuffix+'.pdf','Hupera AI — Workspace Report',period+' · Live workspace data',exportSections))}><FileText size={14}/> {exporting==='PDF'?'Preparing PDF…':'Export as PDF'}</button><button type="button" disabled={!!exporting} onClick={()=>void runExport('CSV',()=>exportReportCsv('hupera-report-'+exportSuffix+'.csv',exportSections))}><Download size={14}/> {exporting==='CSV'?'Preparing CSV…':'Export as CSV / Excel'}</button><button type="button" disabled={!!exporting} onClick={()=>void runExport('PNG',()=>exportReportPng('hupera-report-'+exportSuffix+'.png','Hupera AI — Workspace Report',period+' · Live workspace data',exportSections))}><Download size={14}/> {exporting==='PNG'?'Preparing PNG…':'Download as PNG'}</button></div></details></div>
         {rows.map(([label,value])=><div className="summary-line" key={String(label)}><div><small>{label}</small><b>{String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):String(value)}</b></div></div>)}
       </div>
       <div className="report-visual-card"><div className="section-title inside"><div><h3>Workspace performance</h3><p>Visualised from live reporting totals.</p></div></div><svg id="hupera-report-visual" className="report-svg" viewBox="0 0 1200 560" role="img" aria-label="Appointment status bars and AI versus team response line"><rect width="1200" height="560" rx="24" fill="#f7f9ff"/><text x="48" y="54" fontSize="25" fontWeight="700" fill="#1b2a44">Appointment status</text>{chartValues.slice(0,6).map((v:any,i:number)=><g key={v.label}><text x="48" y={112+i*58} fontSize="18" fill="#52627a">{v.label}</text><rect x="260" y={91+i*58} width="650" height="25" rx="12" fill="#e4eaf5"/><rect x="260" y={91+i*58} width={650*v.value/maxChart} height="25" rx="12" fill="#3976d7"/><text x="930" y={112+i*58} fontSize="18" fontWeight="700" fill="#1b2a44">{v.value}</text></g>)}<text x="48" y="475" fontSize="25" fontWeight="700" fill="#1b2a44">AI vs team responses</text><path d="M300 470 L650 390 L1000 470" fill="none" stroke="#12a37a" strokeWidth="5" strokeLinecap="round"/><circle cx="300" cy="470" r="10" fill="#3976d7"/><circle cx="650" cy="390" r="10" fill="#12a37a"/><circle cx="1000" cy="470" r="10" fill="#3976d7"/><text x="270" y="525" fontSize="18" fill="#52627a">AI {Number(ai.total||0)}</text><text x="600" y="355" fontSize="18" fill="#52627a">Combined responses {Number(ai.total||0)+humanResponses}</text><text x="950" y="525" fontSize="18" fill="#52627a">Team {humanResponses}</text></svg></div>
       <div className="report-grid" style={{marginTop:16}}>
-        <div className="panel-inner"><h3>Appointment status breakdown</h3>{statusRows.length?statusRows.map((item:any)=><div className="summary-line" key={item.status}><div><small>{String(item.status||'unknown').replace(/_/g,' ')}</small><b>{item.total}</b></div></div>):<p>No appointment status data for this period.</p>}</div>
         <div className="panel-inner"><h3>Booking sources</h3>{sourceRows.length?sourceRows.map((item:any)=><div className="summary-line" key={item.source}><div><small>{item.source||'unknown'}</small><b>{item.total}</b></div></div>):<p>No booking source data for this period.</p>}</div>
       </div>
       <div className="report-grid report-insights">
-        <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>Appointment status</h3><p>Confirmed, pending, cancelled and completed</p></div><CalendarCheck size={18}/></div><div className="donut-layout"><div className="donut-ring" style={{background:donutStops?'conic-gradient('+donutStops+')':'#e8edf4'}}><div><b>{bookings.total||0}</b><small>Total</small></div></div><div className="donut-legend">{statusRows.map((item:any)=><div key={item.status}><i style={{background:donutColors[String(item.status||'').toLowerCase()]||'#94a3b8'}}/><span>{String(item.status||'Other').replace(/_/g,' ')}</span><b>{item.total}</b></div>)}</div></div></section>
+        
         <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>AI workload vs human handover</h3><p>Reply volume share, not inferred conversation closure</p></div><Bot size={18}/></div><div className="workload-value">{aiReplyShare}% <small>AI reply share</small></div><div className="workload-track"><span style={{width:aiReplyShare+'%'}}/></div><div className="workload-legend"><span>🤖 AI replies <b>{aiHandled}</b></span><span>👤 Human replies <b>{humanHandled}</b></span></div></section>
-        <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>Department-wise patient flow</h3><p>Appointment volume by service / department</p></div><Stethoscope size={18}/></div>{departmentRows.length?departmentRows.map((item:any)=><div className="department-bar" key={item.department}><div><span>{item.department}</span><b>{item.total}</b></div><i><span style={{width:(Number(item.total||0)/Math.max(1,...departmentRows.map((x:any)=>Number(x.total||0)))*100)+'%'}}/></i></div>):<p>Department-level data is not available yet.</p>}</section>
+        
         <section className="panel-inner insight-card"><div className="insight-heading"><div><h3>Daily message volume</h3><p>Incoming customer messages · {period}</p></div><MessageCircle size={18}/></div>{dailyRows.length?<svg className="daily-volume-chart" viewBox="0 0 600 210" role="img" aria-label="Daily incoming message volume"><path d="M40 170 H560" stroke="#e2e8f0" strokeWidth="2"/><polyline points={dailyPoints} fill="none" stroke="#16a34a" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{dailyRows.map((item:any,i:number)=><circle key={item.day} cx={dailyRows.length>1?40+i*(520/(dailyRows.length-1)):300} cy={170-(Number(item.received_messages||0)/dailyMax)*130} r="4" fill="#16a34a"/>)}<text x="40" y="198" fontSize="12" fill="#64748b">{dailyRows[0]?.day||''}</text><text x="560" y="198" textAnchor="end" fontSize="12" fill="#64748b">{dailyRows[dailyRows.length-1]?.day||''}</text></svg>:<p>Daily message trend is not available yet.</p>}</section>
       </div>
     </>}
   </section>;
 }
 
-function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave,alertsEnabled,pushPermission,pushError,nativePlatform}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void;alertsEnabled:boolean;pushPermission:string;pushError:string;nativePlatform:boolean}) {
-  const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Payment connection status'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status'],['Billing & support','Plan and account']];
+function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave,alertsEnabled,pushPermission,pushError,nativePlatform,paymentData,onRefreshPayment}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void;alertsEnabled:boolean;pushPermission:string;pushError:string;nativePlatform:boolean;paymentData:any;onRefreshPayment:(orderId?:string)=>Promise<any>}) {
+  const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Cashfree subscription gateway'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status']];
   const org=settingsData?.organization||{},prefs=settingsData?.preferences||{},integrations=settingsData?.integrations||{};
   const [draft,setDraft]=useState<any>({});
   const [preferences,setPreferences]=useState<any>({});
+  const [paymentCycle,setPaymentCycle]=useState<'monthly'|'annually'>('monthly');
+  const [paymentBusy,setPaymentBusy]=useState(false);
+  const [paymentError,setPaymentError]=useState('');
+  const [paymentNotice,setPaymentNotice]=useState('');
   useEffect(()=>{setDraft({name:org.name||'',industry:org.industry||'',country:org.country||'',timezone:org.timezone||'Asia/Kolkata',currency:org.currency||'INR',website:org.website||'',description:org.description||'',notification_email:org.notification_email||'',business_phone:org.business_phone||''});setPreferences({...prefs});},[settingsData]);
   const status=(value:any)=>value?.status||'Not connected';
+
+  const startCashfreePayment=async()=>{
+    setPaymentBusy(true);setPaymentError('');setPaymentNotice('');
+    try{
+      const order=await createCashfreeSubscriptionOrder(paymentCycle);
+      if(order?.active||order?.owner_entitlement){
+        await onRefreshPayment();
+        setPaymentNotice(order.message||'Your subscription is already active.');
+        return;
+      }
+      if(!order?.payment_session_id||!order?.order_id)throw new Error(order?.error||'Cashfree did not return a valid payment session.');
+      const sdk=await loadCashfreeSdk();
+      const cashfree=sdk({mode:order.environment==='production'?'production':'sandbox'});
+      const checkout=await cashfree.checkout({paymentSessionId:order.payment_session_id,redirectTarget:'_self'});
+      if(checkout?.error)throw new Error(checkout.error.message||'Cashfree checkout could not be started.');
+      if(checkout?.redirect)return;
+      const verified=await onRefreshPayment(order.order_id);
+      if(verified?.reconciliation?.paid)setPaymentNotice('Payment verified. Your Hupera AI subscription is active.');
+      else setPaymentNotice('Checkout was closed or is still pending. Refresh status after completing payment.');
+    }catch(error){setPaymentError(error instanceof Error?error.message:'Unable to start Cashfree checkout.');}
+    finally{setPaymentBusy(false);}
+  };
+
   return <section className="panel module-panel">
     <div className="toolbar"><div><h2>Workspace settings</h2><p>Settings are loaded from the authenticated organisation.</p></div></div>
     <div className="settings-layout">
@@ -961,12 +1044,27 @@ function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,e
         </>}
         {section==='WhatsApp integration'&&<><p>WhatsApp credentials remain protected on the server. This view shows the live connection without exposing access tokens.</p><div className="integration-state"><MessageCircle/><div><b>{status(integrations.whatsapp)}</b><small>{integrations.whatsapp?.verified_name||integrations.whatsapp?.display_phone_number||'No connected WhatsApp sender is available.'}</small></div></div><div className="summary-line"><div><small>Last updated</small><b>{integrations.whatsapp?.updated_at?new Date(integrations.whatsapp.updated_at).toLocaleString('en-IN'):'—'}</b></div></div></>}
         {section==='AI Workforce'&&<><p>Manage AI employees enabled for this workspace. Status is synced from your organisation.</p>{employees.length?employees.map((employee:any)=><div className="integration-state" key={employee.id}><Bot/><div><b>{employee.name||employee.employee_type||'AI employee'}</b><small>{employee.description||employee.employee_type||'Workspace AI employee'} · {employee.status||'Status unavailable'}</small></div></div>):<div className="empty-block">No AI employees are configured for this workspace yet.</div>}<div className="summary-line"><div><small>AI approval required</small><b>{preferences.ai_approval_required===false?'No':'Yes'}</b></div><input aria-label="AI approval required" type="checkbox" checked={preferences.ai_approval_required!==false} onChange={e=>setPreferences((old:any)=>({...old,ai_approval_required:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save AI preferences</button></>}
-        {section==='Payments'&&<><p>Payment provider state is read from your workspace. Provider secrets are never displayed in the mobile app.</p>{(integrations.payments||[]).length?(integrations.payments||[]).map((item:any,i:number)=><div className="integration-state" key={i}><Wallet/><div><b>{item.provider||'Payment provider'} · {item.status||'Unknown'}</b><small>{item.updated_at?new Date(item.updated_at).toLocaleString('en-IN'):''}</small></div></div>):<div className="empty-block">No payment connection record was returned for this organisation.</div>}</>}
+        {section==='Payments'&&<div className="cashfree-payment-panel">
+          <div className="cashfree-brand-row"><span className="cashfree-mark"><CreditCard size={20}/></span><div><b>Cashfree Payments</b><small>Secure subscription checkout</small></div><span className="cashfree-secure"><ShieldCheck size={13}/> Secure</span></div>
+          <p>Renew or activate your Hupera AI subscription securely. Cashfree shows the payment methods enabled for your account, including UPI apps and cards where available.</p>
+          <div className="cashfree-plan-picker" role="group" aria-label="Choose subscription billing cycle">
+            <button type="button" className={paymentCycle==='monthly'?'selected':''} onClick={()=>setPaymentCycle('monthly')}><b>Monthly</b><strong>₹999</strong><small>per month</small></button>
+            <button type="button" className={paymentCycle==='annually'?'selected':''} onClick={()=>setPaymentCycle('annually')}><b>Annual</b><strong>₹9,990</strong><small>per year</small></button>
+          </div>
+          <div className="cashfree-subscription-status"><span>Subscription status</span><b>{paymentData?.subscription?.status||'Loading status…'}</b>{paymentData?.subscription?.current_period_end&&<small>Valid until {new Date(paymentData.subscription.current_period_end).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</small>}</div>
+          {paymentData?.subscription?.owner_entitlement&&<div className="cashfree-notice">Owner account · All subscription features are unlocked.</div>}
+          {paymentNotice&&<div className="cashfree-notice" role="status">{paymentNotice}</div>}
+          {paymentError&&<div className="cashfree-error" role="alert">{paymentError}</div>}
+          <button type="button" className="primary-button cashfree-pay-button" disabled={paymentBusy||!paymentData?.configured||paymentData?.subscription?.owner_entitlement||paymentData?.subscription?.status==='active'} onClick={()=>void startCashfreePayment()}>{paymentBusy?'Preparing secure checkout…':paymentData?.subscription?.status==='active'?'Subscription active':'Pay securely with Cashfree'}</button>
+          <button type="button" className="outline-button cashfree-refresh-button" disabled={paymentBusy} onClick={()=>void onRefreshPayment().catch(error=>setPaymentError(error instanceof Error?error.message:'Unable to refresh payment status.'))}><RefreshCw size={14}/> Refresh payment status</button>
+          {!paymentData?.configured&&!paymentData?.subscription?.owner_entitlement&&<small className="cashfree-help">Cashfree merchant setup is not complete yet. Payments will be enabled when the gateway is configured.</small>}
+          <div className="cashfree-methods"><span>UPI</span><span>Cards</span><span>Netbanking</span><span>Wallets*</span></div>
+          <small className="cashfree-help">*Available payment methods depend on your Cashfree merchant configuration and customer eligibility.</small>
+        </div>}
         {section==='Team & permissions'&&<><p>Current role for this authenticated workspace.</p><div className="summary-line"><div><small>Workspace role</small><b>{org.role||'Workspace member'}</b></div></div><div className="summary-line"><div><small>Business workspace</small><b>{org.name||'—'}</b></div></div><p>Team invitations and role changes require the organisation's team-management permission API, which is not exposed to this mobile session yet.</p></>}
         {section==='Notifications'&&<><p>Enable native Firebase push alerts on this Android device. Notifications are delivered to the app, not through browser alerts.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> {alertsEnabled?'Re-register this device':'Enable device alerts'}</button><div className="summary-line"><div><small>Device permission</small><b>{nativePlatform?(pushPermission==='registered'?'Allowed · device registered':pushPermission==='granted'?'Allowed · registering':pushPermission==='denied'?'Blocked in Android settings':pushPermission==='registration_failed'?'Registration failed':pushPermission):typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b>{!!pushError&&<small style={{color:'#dc2626',display:'block',marginTop:6,overflowWrap:'anywhere'}}>Details: {pushError}</small>}</div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
         {section==='Appearance'&&<><p>Choose the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button><div className="summary-line"><div><small>Compact mode</small><b>{preferences.compact_mode?'On':'Off'}</b></div><input type="checkbox" checked={!!preferences.compact_mode} onChange={e=>setPreferences((old:any)=>({...old,compact_mode:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save appearance preferences</button></>}
         {section==='Google Calendar'&&<><p>Calendar integration status for this workspace.</p><div className="integration-state"><CalendarCheck/><div><b>{integrations.calendar?.connected_email?'Connected':'Not connected'}</b><small>{integrations.calendar?.connected_email||'No Google Calendar account is connected.'}</small></div></div></>}
-        {section==='Billing & support'&&<><p>Billing and subscription information is protected by the workspace account.</p><div className="empty-block">Billing details are not exposed through the mobile settings API. No external browser redirect is triggered.</div></>}
         <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}><h3 style={{marginTop:0}}>Account</h3><p>Sign out and clear the Hupera mobile session.</p><button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button></div>
       </div>
     </div>
@@ -990,13 +1088,16 @@ function App() {
       try {
         const callback = new URL(url);
 
-        // Accept only Hupera's Android authentication callback.
-        if (
-          callback.protocol !== 'hupera:' ||
-          callback.hostname !== 'auth'
-        ) {
+        if (callback.protocol === 'hupera:' && callback.hostname === 'payment') {
+          const orderId=callback.searchParams.get('order_id')||'';
+          if(orderId){
+            (window as any).__huperaPendingPaymentOrderId=orderId;
+            window.dispatchEvent(new CustomEvent('hupera:cashfree-return',{detail:{orderId}}));
+          }
+          try { await Browser.close(); } catch {}
           return;
         }
+        if (callback.protocol !== 'hupera:' || callback.hostname !== 'auth') return;
 
         const code = callback.searchParams.get('code');
         const callbackError = callback.searchParams.get('error');
