@@ -43,9 +43,11 @@ function WorkspaceApp() {
   const [workspace,setWorkspace]=useState<any>({dashboard:null,employees:[],appointments:[],reports:null});
   const [dataLoading,setDataLoading]=useState(true);
   const [dataError,setDataError]=useState('');
+  const [unreadNotifications,setUnreadNotifications]=useState(0);
+  const [alertsEnabled,setAlertsEnabled]=useState(false);
+  const [pushPermission,setPushPermission]=useState('unknown');
   const [search,setSearch]=useState('');
   const [reply,setReply]=useState('');
-  const [alertsEnabled,setAlertsEnabled]=useState(()=>typeof Notification!=='undefined'&&Notification.permission==='granted');
   const alertAudio=useRef<AudioContext|null>(null);
   const pushTokenRef=useRef('');
   const priorityInitialized=useRef(false);
@@ -80,6 +82,7 @@ function WorkspaceApp() {
   const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',phone:'',channel:'whatsapp',handlingMode:'AI',needsAction:false,priorityType:undefined,unreadCount:0,appointments:[],payments:[],initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
   const human=String(active.handlingMode||'AI').toLowerCase()==='human';
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
+  const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
 
   const notify=(s:string)=>{
     setToast(s);
@@ -117,10 +120,11 @@ function WorkspaceApp() {
     if(workspaceSyncBusy.current||document.hidden)return;
     workspaceSyncBusy.current=true;setDataError('');
     try{
-      const [dashboard,employees,appointments,inbox,reports]=await Promise.all([
+      const [dashboard,employees,appointments,inbox,reports,notifications]=await Promise.all([
         getHuperaResource<any>('dashboard'),getHuperaResource<any>('employees'),
-        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:period.replace(' days','')})
+        getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:period.replace(' days','')}),getHuperaResource<any>('notifications')
       ]);
+      setUnreadNotifications(Number(notifications.unread_count||0));
       const bookings=Array.isArray(appointments.appointments)?appointments.appointments:[];
       const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
       const mapped:Chat[]=conversations.map((c:any)=>{
@@ -129,7 +133,7 @@ function WorkspaceApp() {
         const stamp=b.starts_at?new Date(b.starts_at):null;
         const validDate=stamp&&!Number.isNaN(stamp.getTime())?stamp:null;
         return {id:String(c.id),conversationId:String(c.id),bookingId:b.id?String(b.id):undefined,
-          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),needsAction:c.needs_action===true,priorityType:c.priority_type?String(c.priority_type):undefined,unreadCount:Number(c.unread_count||0),appointments:[],payments:[],initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
+          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),needsAction:c.needs_action===true,priorityType:c.priority_type?String(c.priority_type):undefined,unreadCount:Number(c.unread_count||0),pendingRequestCount:Number(c.needs_action?Math.max(1,Number(c.pending_booking_count||0)):0),appointments:[],payments:[],initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
           status:String(b.status||c.status||'Open').replace(/_/g,' '),
           time:c.last_message_at?new Date(c.last_message_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
           preview:c.last_message||c.subject||'No messages yet',department:b.service_name||b.title||'—',
@@ -258,14 +262,21 @@ function WorkspaceApp() {
               headers:{'Content-Type':'application/json',Authorization:'Bearer '+currentSession},
               body:JSON.stringify({token:tokenInfo.value,deviceName:'Hupera Android'})
             });
-            if(!response.ok)console.warn('Hupera push token registration failed',response.status);
+            if(!response.ok){console.warn('Hupera push token registration failed',response.status);setPushPermission('registration_failed');}
+            else {setPushPermission('registered');setAlertsEnabled(true);}
           }catch(error){console.warn('Hupera push token registration failed',error);}
         });
         listeners.push(registration);
         const registrationError=await PushNotifications.addListener('registrationError',error=>{
           console.warn('Firebase push registration error',error);
+          setPushPermission('registration_failed');
         });
         listeners.push(registrationError);
+        const actionPerformed=await PushNotifications.addListener('pushNotificationActionPerformed',action=>{
+          const data=action.notification?.data||{};
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:data}));
+        });
+        listeners.push(actionPerformed);
         const received=await PushNotifications.addListener('pushNotificationReceived',notification=>{
           if(cancelled)return;
           void refreshWorkspace();
@@ -284,8 +295,11 @@ function WorkspaceApp() {
         });
         listeners.push(received);
         let permission=await PushNotifications.checkPermissions();
+        setPushPermission(permission.receive);
         if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
+        setPushPermission(permission.receive);
         if(cancelled||permission.receive!=='granted')return;
+        setAlertsEnabled(true);
         await PushNotifications.createChannel({
           id:'hupera_messages',
           name:'Hupera messages',
@@ -368,16 +382,18 @@ function WorkspaceApp() {
       try{
         let permission=await PushNotifications.checkPermissions();
         if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
-        if(permission.receive!=='granted'){notify('Allow notifications for Hupera in Android settings, then try again.');return;}
+        setPushPermission(permission.receive);
+        if(permission.receive!=='granted'){setAlertsEnabled(false);notify('Allow notifications for Hupera in Android settings, then try again.');return;}
         await PushNotifications.createChannel({id:'hupera_messages',name:'Hupera messages',description:'WhatsApp messages, appointment and payment updates',importance:5,visibility:1,sound:'default',vibration:true});
         await PushNotifications.register();
         setAlertsEnabled(true);
-        notify('Android push notifications enabled for this device.');
+        notify('Android notifications allowed. Registering this device with Firebase…');
       }catch(error){console.warn('Hupera Android notification permission failed',error);notify('Could not enable Android notifications. Check app notification permission in Android settings.');}
       return;
     }
-    if(typeof Notification==='undefined'){notify('Notifications are not supported in this browser.');return;}
+    if(typeof Notification==='undefined'){setPushPermission('unsupported');notify('Notifications are not supported in this browser.');return;}
     const permission=await Notification.requestPermission();
+    setPushPermission(permission);
     setAlertsEnabled(permission==='granted');
     if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}
     notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');
@@ -485,7 +501,7 @@ function WorkspaceApp() {
         <div className="brand"><div className="brand-mark"><Bot size={22}/></div><div><b>Hupera <span>AI</span></b><small>CLIENT WORKSPACE</small></div></div>
         <div className="workspace-switch"><div className="hospital-icon"><Stethoscope size={17}/></div><div><b>{workspace.dashboard?.organization?.name||'Hupera Workspace'}</b><small>Business account</small></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
-        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('');setMobileChatOpen(false);}}><I size={17}/><span>{n}</span>{n==='Inbox'&&chats.length>0&&<i className="nav-count">{chats.length}</i>}</button>)}
+        {nav.map(([n,I])=><button key={n} className={'side-link '+(tab===n?'selected':'')} onClick={()=>{setTab(n);setSearch('');setMobileChatOpen(false);}}><I size={17}/><span>{n}</span>{n==='Inbox'&&pendingReviewCount>0&&<i className="nav-count">{pendingReviewCount>99?'99+':pendingReviewCount}</i>}</button>)}
         <div className="sidebar-bottom"><i className="online-dot"/> <span>AI workforce operational</span><small>Live inbox · backend connected</small></div>
       </aside>
 
@@ -493,7 +509,7 @@ function WorkspaceApp() {
         <header className="topbar">
           <div className="mobile-brand"><div className="brand-mark"><Bot size={20}/></div><b>Hupera <span>AI</span></b></div>
           <div className="top-actions">
-            <button className="icon-btn" onClick={()=>setTab('Inbox')} aria-label="Open inbox notifications"><Bell size={18}/></button>
+            <button className="icon-btn notification-bell" onClick={()=>setTab('Inbox')} aria-label={'Open notifications, '+unreadNotifications+' unread'}><Bell size={18}/>{unreadNotifications>0&&<i className="top-badge">{unreadNotifications>99?'99+':unreadNotifications}</i>}</button>
             <button className="icon-btn" onClick={toggleTheme} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} title={theme==='light'?'Dark mode':'Light mode'}>
               {theme==='light'?<Moon size={19}/>:<Sun size={19}/>}
             </button>
@@ -546,7 +562,7 @@ function WorkspaceApp() {
           {tab==='Inbox'&&<>
             <section className={'inbox-panel '+(mobileChatOpen?'mobile-chat-open':'')}>
               <aside className="inbox-list">
-                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · automatic 1-second sync</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
+                <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · instant realtime updates</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
                 <div className="inbox-chat-list">{filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}</div>
               </aside>
@@ -584,13 +600,13 @@ function WorkspaceApp() {
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
           {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
-          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings}/> }
+          {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} nativePlatform={Capacitor.isNativePlatform()}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
         </main>
       </div>
 
-      <nav className="mobile-nav">{nav.map(([n,I])=><button key={n} className={tab===n?'active':''} onClick={()=>{setTab(n);setMobileChatOpen(false);}}><I size={19}/><span>{n}</span></button>)}</nav>
+      <nav className="mobile-nav">{nav.map(([n,I])=><button key={n} className={tab===n?'active':''} onClick={()=>{setTab(n);setMobileChatOpen(false);}}><span className="mobile-nav-icon"><I size={19}/>{n==='Inbox'&&pendingReviewCount>0&&<i className="mobile-nav-badge">{pendingReviewCount>99?'99+':pendingReviewCount}</i>}</span><span>{n}</span></button>)}</nav>
       {toast&&<div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
     </div>
   );
