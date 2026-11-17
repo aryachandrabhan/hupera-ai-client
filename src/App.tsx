@@ -223,7 +223,7 @@ function WorkspaceApp() {
   },[period]);
 
 
-  useEffect(()=>{const timer=window.setInterval(()=>{void refreshWorkspace();},1000);return ()=>window.clearInterval(timer);},[tab,alertsEnabled]);
+  // Workspace state is refreshed by Ably events; no interval polling.
 
   useEffect(()=>{
     if(!active.conversationId||tab!=='Inbox')return;
@@ -237,8 +237,7 @@ function WorkspaceApp() {
       setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
     }).catch(e=>{if(!cancelled)setDataError(e instanceof Error?e.message:'Unable to load conversation.');});
     void loadThread();
-    const timer=window.setInterval(()=>{if(!document.hidden)void loadThread();},1000);
-    return ()=>{cancelled=true;window.clearInterval(timer);};
+    return ()=>{cancelled=true;};
   },[active.conversationId,tab]);
 
   const enableAlerts=async()=>{if(typeof Notification==='undefined'){notify('Browser notifications are not supported on this device.');return;}const permission=await Notification.requestPermission();setAlertsEnabled(permission==='granted');if(permission==='granted'&&typeof AudioContext!=='undefined'){try{const ctx=new AudioContext();await ctx.resume();alertAudio.current=ctx;}catch{}}notify(permission==='granted'?'Inbox notifications and sound alerts enabled.':'Notification permission was not granted.');};
@@ -253,6 +252,53 @@ function WorkspaceApp() {
     } as Msg));
     setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
   };
+
+  useEffect(()=>{
+    let disposed=false;
+    let realtime:any=null;
+    let channel:any=null;
+    let retryHandle:number|undefined;
+    const connect=async()=>{
+      try{
+        const sessionToken=await getToken();
+        if(!sessionToken||disposed)return;
+        const Ably=(window as any).Ably;
+        if(!Ably?.Realtime)throw new Error('Realtime library did not load. Check your internet connection.');
+        const authUrl='https://hupera-ai.hatchable.site/api/realtime-token';
+        const authResponse=await fetch(authUrl,{method:'GET',headers:{Authorization:'Bearer '+sessionToken}});
+        const tokenDetails=await authResponse.json().catch(()=>({}));
+        if(!authResponse.ok||!tokenDetails.token||!tokenDetails.channel)throw new Error(tokenDetails.error||'Secure realtime authentication failed.');
+        if(disposed)return;
+        realtime=new Ably.Realtime({
+          tokenDetails,
+          authUrl,
+          authMethod:'GET',
+          authHeaders:{Authorization:'Bearer '+sessionToken},
+          autoConnect:true,
+          disconnectedRetryTimeout:5000,
+          suspendedRetryTimeout:10000
+        });
+        channel=realtime.channels.get(tokenDetails.channel);
+        channel.subscribe((message:any)=>{
+          if(disposed)return;
+          const eventName=String(message?.name||'');
+          if(!['message.created','conversation.updated','appointment.created','appointment.updated','payment.updated'].includes(eventName))return;
+          void refreshWorkspace();
+          if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
+        });
+        realtime.connection.on('failed',()=>{if(!disposed)setDataError('Realtime connection failed. Check your connection and reopen Hupera.');});
+      }catch(error){
+        if(!disposed)console.error('Hupera realtime connection failed',error);
+      }
+    };
+    void connect();
+    return ()=>{
+      disposed=true;
+      if(retryHandle!==undefined)window.clearTimeout(retryHandle);
+      try{channel?.unsubscribe();}catch{}
+      try{realtime?.close();}catch{}
+    };
+  },[tab,active.conversationId]);
 
   const updateBookingStatus=async(bookingId:string,status:'confirmed'|'cancelled'|'rescheduled')=>{
     if(!bookingId){notify('This request is not linked to a booking record.');return;}
