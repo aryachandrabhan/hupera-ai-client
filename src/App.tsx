@@ -47,6 +47,7 @@ function WorkspaceApp() {
   const [reply,setReply]=useState('');
   const [alertsEnabled,setAlertsEnabled]=useState(()=>typeof Notification!=='undefined'&&Notification.permission==='granted');
   const alertAudio=useRef<AudioContext|null>(null);
+  const pushTokenRef=useRef('');
   const priorityInitialized=useRef(false);
   const workspaceSyncBusy=useRef(false);
   const previousPriorityIds=useRef<Set<string>>(new Set());
@@ -95,7 +96,21 @@ function WorkspaceApp() {
     }
   };
 
-  const handleLogout=()=>{ window.dispatchEvent(new Event('hupera-logout')); };
+  const handleLogout=async()=>{
+    const deviceToken=pushTokenRef.current;
+    try{
+      const sessionToken=await getToken();
+      if(sessionToken&&deviceToken){
+        await fetch('https://hupera-ai.hatchable.site/api/mobile-push-token',{
+          method:'DELETE',
+          headers:{'Content-Type':'application/json',Authorization:'Bearer '+sessionToken},
+          body:JSON.stringify({token:deviceToken})
+        });
+      }
+    }catch(error){console.warn('Could not unregister Hupera push token on logout',error);}
+    pushTokenRef.current='';
+    window.dispatchEvent(new Event('hupera-logout'));
+  };
 
 
   const refreshWorkspace=async()=>{
@@ -234,6 +249,7 @@ function WorkspaceApp() {
         if(!sessionToken||cancelled)return;
         const registration=await PushNotifications.addListener('registration',async(tokenInfo)=>{
           if(cancelled||!tokenInfo?.value)return;
+          pushTokenRef.current=tokenInfo.value;
           try{
             const currentSession=await getToken();
             if(!currentSession)return;
