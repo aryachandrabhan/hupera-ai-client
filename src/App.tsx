@@ -13,7 +13,7 @@ import {
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
   Download, Home, MessageCircle, Plus, Search, Send, Settings,
   ShieldCheck, Stethoscope, TrendingDown, TrendingUp,
-  Wallet, X, RefreshCw, Users, FileText, Sun, Moon, LogOut
+  X, RefreshCw, Users, FileText, Sun, Moon, LogOut
 } from 'lucide-react';
 import './styles.css';
 import { exportReportCsv, exportReportPdf, exportReportPng, type ReportExportSection } from './reportExports';
