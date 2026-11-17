@@ -540,3 +540,159 @@ button {
 .dark-theme .chat-jump-button{background:#34465b}
 .dark-theme .chat-jump-button span{border-color:#151f30}
 @media(max-width:850px){.chat-jump-button{right:22px;bottom:calc(96px + env(safe-area-inset-bottom))}}
+
+
+/* Premium dark-theme contrast pass: every workspace surface and nested view */
+.dark-theme .main-area,
+.dark-theme .content,
+.dark-theme .inbox-panel,
+.dark-theme .chat-detail,
+.dark-theme .inbox-list,
+.dark-theme .inbox-chat-list,
+.dark-theme .chat-detail-head,
+.dark-theme .chat-history-head,
+.dark-theme .appointment-page,
+.dark-theme .module-panel,
+.dark-theme .report-data-panel,
+.dark-theme .report-visual-card,
+.dark-theme .report-grid,
+.dark-theme .settings-layout,
+.dark-theme .config-panel,
+.dark-theme .day-card,
+.dark-theme .preview-panel {
+  background: #0b1220;
+  color: #e7edf7;
+}
+.dark-theme .chat-detail { background:#111c2d; }
+.dark-theme .chat-detail-head,
+.dark-theme .chat-history-head,
+.dark-theme .inbox-list-head,
+.dark-theme .request-details,
+.dark-theme .appointment-actions,
+.dark-theme .report-data-panel,
+.dark-theme .panel-inner,
+.dark-theme .settings-detail,
+.dark-theme .config-panel,
+.dark-theme .day-card {
+  border-color:#2b3a50;
+}
+.dark-theme .chat-person b,
+.dark-theme .chat-history-head h3,
+.dark-theme .inbox-list-head h2,
+.dark-theme .request-heading b,
+.dark-theme .request-details b,
+.dark-theme .appointment-request,
+.dark-theme .panel-inner h3,
+.dark-theme .insight-heading h3,
+.dark-theme .summary-line b,
+.dark-theme .settings-menu b,
+.dark-theme .settings-detail h3,
+.dark-theme .day-title h3,
+.dark-theme .schedule-heading h2,
+.dark-theme .preview-panel h2,
+.dark-theme .toolbar h2,
+.dark-theme .section-title h2 {
+  color:#f1f5fb !important;
+}
+.dark-theme .chat-person small,
+.dark-theme .chat-history-head small,
+.dark-theme .request-details span,
+.dark-theme .appointment-request p,
+.dark-theme .action-audit,
+.dark-theme .panel-inner p,
+.dark-theme .insight-heading p,
+.dark-theme .summary-line small,
+.dark-theme .settings-menu small,
+.dark-theme .settings-detail p,
+.dark-theme .day-title small,
+.dark-theme .preview-block>span,
+.dark-theme .muted-copy,
+.dark-theme .toolbar p,
+.dark-theme .page-heading p,
+.dark-theme .section-title p,
+.dark-theme .chat-status,
+.dark-theme .chat-copy p,
+.dark-theme .chat-copy small,
+.dark-theme .fact small,
+.dark-theme .footer {
+  color:#aebbd0 !important;
+}
+.dark-theme .appointment-request,
+.dark-theme .payment-request-card,
+.dark-theme .request-details,
+.dark-theme .settings-menu button,
+.dark-theme .settings-detail,
+.dark-theme .panel-inner,
+.dark-theme .report-visual-card,
+.dark-theme .report-data-panel,
+.dark-theme .empty-block,
+.dark-theme .preview-day,
+.dark-theme .schedule-block,
+.dark-theme .inbox-global-search,
+.dark-theme .search-field,
+.dark-theme .reply-box,
+.dark-theme .chat-thread {
+  background:#142136 !important;
+  border-color:#2d405a !important;
+  color:#e7edf7 !important;
+}
+.dark-theme .message.received {background:#26364d!important;color:#f0f5fc!important;border-color:#3a4d68!important}
+.dark-theme .message.sent {background:#173d35!important;color:#e4fff4!important;border-color:#286653!important}
+.dark-theme .message.system-message {background:#44351d!important;color:#ffedc5!important;border-color:#73592a!important}
+.dark-theme .sender,.dark-theme .message-time {color:#aebbd0!important}
+.dark-theme .reply-box input,
+.dark-theme .inbox-global-search input,
+.dark-theme .search-field input,
+.dark-theme .settings-detail input,
+.dark-theme .settings-detail select,
+.dark-theme .settings-detail textarea,
+.dark-theme .settings-grid input,
+.dark-theme .settings-grid select,
+.dark-theme .block-grid input,
+.dark-theme .block-grid select,
+.dark-theme .day-controls select,
+.dark-theme .toolbar select {
+  background:#0d1829!important;color:#f1f5fb!important;border-color:#3a4b65!important;
+}
+.dark-theme input::placeholder {color:#93a4bc!important}
+.dark-theme .outline-button,.dark-theme .date-chip,.dark-theme .text-button {
+  background:#1c2c43;color:#e7edf7;border-color:#40536e;
+}
+.dark-theme .status-badge.neutral {background:#293950;color:#c9d5e5}
+.dark-theme .status-badge.ok {background:#123d30;color:#9be7c2}
+.dark-theme .status-badge.warning {background:#49351b;color:#ffdc9b}
+.dark-theme .upi-strip,.dark-theme .demo-strip,.dark-theme .integration-state {
+  background:#1b2b42;border-color:#344a68;color:#d8e5f6;
+}
+.dark-theme .upi-strip b,.dark-theme .demo-strip b {color:#e7f0ff}
+.dark-theme .chat-row {background:#121e30;border-color:#293a52}
+.dark-theme .chat-row:hover,.dark-theme .chat-row.chosen {background:#203654}
+.dark-theme .mobile-chat-open .chat-detail {background:#111c2d}
+.dark-theme .mobile-chat-open .chat-person,
+.dark-theme .mobile-chat-open .chat-history-head {color:#f1f5fb}
+.dark-theme .report-svg text {fill:#dce6f4!important}
+.dark-theme .report-svg rect:first-child {fill:#142136!important}
+.dark-theme .report-svg rect:nth-of-type(2n) {fill:#26364d}
+.dark-theme .daily-volume-chart text {fill:#bdcbe0!important}
+.dark-theme .bar-track {background:#293a52}
+.dark-theme .metric-card,.dark-theme .panel {box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.dark-theme .chat-jump-button {background:#287b60;color:#fff}
+.dark-theme .notification-panel,.dark-theme .notification-items {background:#142136;border-color:#34465e}
+.dark-theme .notification-empty {color:#aebbd0}
+
+/* Native-feeling date/time picker dialog */
+.modal-backdrop {position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(5,12,24,.62);backdrop-filter:blur(7px)}
+.reschedule-modal {width:min(100%,440px);padding:22px;border:1px solid #dfe7f1;border-radius:18px;background:#fff;color:#17243b;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+.reschedule-modal-head {display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.reschedule-modal-head>div:nth-child(2){flex:1;min-width:0}
+.reschedule-modal-head h2 {font:800 17px Manrope,sans-serif;margin:0 0 5px;color:inherit}
+.reschedule-modal-head p {font-size:11px;color:#7b899d;margin:0}
+.reschedule-modal-icon {width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:#eaf2ff;color:#2868c7}
+.reschedule-field {display:flex;flex-direction:column;gap:8px;margin:14px 0;color:#52647c;font-size:11px;font-weight:700}
+.reschedule-field span {display:flex;align-items:center;gap:7px}
+.reschedule-field input {width:100%;min-height:46px;padding:10px 12px;border:1px solid #dce4ee;border-radius:10px;background:#f9fbfe;color:#17243b;font:600 14px 'DM Sans',sans-serif}
+.reschedule-modal-actions {display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
+.dark-theme .reschedule-modal {background:#142136;border-color:#34465e;color:#f1f5fb}
+.dark-theme .reschedule-modal-head p,.dark-theme .reschedule-field {color:#b6c4d8}
+.dark-theme .reschedule-field input {background:#0b1627;border-color:#40536e;color:#f1f5fb;color-scheme:dark}
+@media(max-width:650px){.reschedule-modal{padding:18px;border-radius:16px}.reschedule-modal-actions>*{flex:1}}
