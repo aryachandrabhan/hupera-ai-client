@@ -296,8 +296,6 @@ function WorkspaceApp() {
         listeners.push(received);
         let permission=await PushNotifications.checkPermissions();
         setPushPermission(permission.receive);
-        if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
-        setPushPermission(permission.receive);
         if(cancelled||permission.receive!=='granted')return;
         setAlertsEnabled(true);
         await PushNotifications.createChannel({
