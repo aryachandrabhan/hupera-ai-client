@@ -13,7 +13,7 @@ import {
 import './styles.css';
 
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
-type Msg = {from:'customer'|'ai'|'human'|'system';text:string;time:string;type?:string};
+type Msg = {id?:string;from:'customer'|'ai'|'human'|'system';text:string;time:string;type?:string;createdAt?:string;metadata?:any};
 type Chat = {id:string;conversationId:string;bookingId?:string;name:string;phone:string;channel:string;handlingMode:string;needsAction:boolean;priorityType?:string;unreadCount:number;appointments:any[];payments:any[];initials:string;status:string;time:string;preview:string;department:string;doctor:string;date:string;day:string;slot:string;format:string;amount:number;payment:string;upi:string;transactionId?:string;messages:Msg[]};
 type Block = {id:number;department:string;doctors:string[];from:string;to:string;fee:number;resourceId:string;serviceId:string};
 type Day = {name:string;enabled:boolean;blocks:Block[]};
@@ -52,7 +52,6 @@ function WorkspaceApp() {
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
   const [availabilityItems,setAvailabilityItems]=useState<any[]>([]);
-  const [availabilitySettings,setAvailabilitySettings]=useState<any>({});
   const [settingsData,setSettingsData]=useState<any>(null);
   const [settingsSaving,setSettingsSaving]=useState(false);
   const [timezone,setTimezone]=useState('Asia/Kolkata');
@@ -151,7 +150,6 @@ function WorkspaceApp() {
       setDays(mapped);
       setAvailabilityItems(Array.isArray(data.items)?data.items:[]);
       const settings=data.settings||{};
-      setAvailabilitySettings(settings);
       setSlot(String(settings.default_slot_duration_minutes||30));
       setBuffer(String(settings.default_buffer_minutes||0));
       setTimezone(String(settings.timezone||'Asia/Kolkata'));
@@ -396,15 +394,20 @@ function WorkspaceApp() {
                 <div className="chat-history-head"><div><h3>Complete conversation history</h3><small>{active.messages.length} messages · oldest to newest</small></div><span className="mode-pill">{human?'Human takeover active':'AI agent active'}</span></div>
                 <div className="chat-thread">{[
                   ...(active.appointments||[]).map((item:any)=>({kind:'appointment',item,at:item.created_at||item.starts_at||''})),
+                  ...(active.appointments||[]).filter((item:any)=>item.payment_confirmation_requested_at||['reported','pending','awaiting_confirmation'].includes(String(item.payment_status||'').toLowerCase())).map((item:any)=>({kind:'payment_review',item,at:item.payment_confirmation_requested_at||item.created_at||''})),
                   ...(active.payments||[]).map((item:any)=>({kind:'payment_order',item,at:item.created_at||''})),
                   ...(active.messages||[]).map((item:any,index:number)=>({kind:'message',item,index,at:item.createdAt||item.time||''}))
                 ].sort((a:any,b:any)=>new Date(a.at||0).getTime()-new Date(b.at||0).getTime()).map((entry:any)=>{
                   if(entry.kind==='appointment'){
-                    const b=entry.item;const status=String(b.status||'pending').toLowerCase();const locked=['confirmed','cancelled','completed','deleted'].includes(status);
+                    const b=entry.item;const status=String(b.status||'pending').toLowerCase();const locked=['confirmed','rescheduled','cancelled','completed','deleted'].includes(status);
                     return <div className="message-wrap system" key={'appointment-'+b.id}><article className="appointment-request"><div className="request-heading"><CalendarCheck size={17}/><b>Appointment request</b><span className={'status-badge '+(status==='confirmed'?'ok':'neutral')}>{status.replace(/_/g,' ')}</span></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div>{locked?<div className="action-audit"><CheckCircle2 size={14}/> {status==='confirmed'?'Confirmed':status==='cancelled'?'Cancelled':status==='completed'?'Completed':'Closed'} · {b.updated_at?new Date(b.updated_at).toLocaleString('en-IN'):'Saved in workspace'}</div>:<div className="appointment-actions"><button className="primary-button" onClick={()=>void updateBookingStatus(String(b.id),'confirmed')}><Check size={14}/> Confirm</button><button className="outline-button" onClick={()=>void updateBookingStatus(String(b.id),'rescheduled')}><RefreshCw size={14}/> Reschedule</button><button className="danger-button" onClick={()=>void updateBookingStatus(String(b.id),'cancelled')}><X size={14}/> Cancel</button></div>}</article></div>;
                   }
+                  if(entry.kind==='payment_review'){
+                    const b=entry.item;const paymentStatus=String(b.payment_status||'pending').toLowerCase();const settled=['paid','succeeded','completed'].includes(paymentStatus);const declined=paymentStatus==='declined';
+                    return <div className="message-wrap system" key={'payment-review-'+b.id}><article className="appointment-request payment-request-card"><div className="request-heading"><CreditCard size={17}/><b>Payment confirmation request</b><span className={'status-badge '+(settled?'ok':declined?'warning':'neutral')}>{settled?'received':declined?'not received':paymentStatus}</span></div><div className="request-details"><span>Appointment</span><b>{b.reference_code||b.title||'Appointment'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference / UTR</span><b>{b.payment_reference||'Not supplied'}</b></div>{settled||declined?<div className="action-audit"><CheckCircle2 size={14}/> {settled?'Payment received':'Payment not received'} · {b.payment_reviewed_at?new Date(b.payment_reviewed_at).toLocaleString('en-IN'):'Review saved'}</div>:<div className="appointment-actions"><button className="primary-button" onClick={()=>void reviewPayment(String(b.id),'received')}>Receive Payment</button><button className="danger-button" onClick={()=>void reviewPayment(String(b.id),'not_received')}>Payment Not Received</button></div>}</article></div>;
+                  }
                   if(entry.kind==='payment_order'){
-                    const p=entry.item;const booking=(active.appointments||[]).find((x:any)=>x.id===p.booking_id);const paid=String(booking?.payment_status||p.status||'').toLowerCase()==='paid';
+                    const p=entry.item;const booking=(active.appointments||[]).find((x:any)=>x.id===p.booking_id);const paid=['paid','succeeded','completed'].includes(String(booking?.payment_status||p.status||'').toLowerCase());
                     return <div className="message-wrap system" key={'payment-order-'+p.id}><article className="appointment-request payment-request-card"><div className="request-heading"><CreditCard size={17}/><b>Payment request</b><span className={'status-badge '+(paid?'ok':'neutral')}>{paid?'received':String(p.status||'pending')}</span></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:p.currency||'INR'}).format(Number(p.amount||0))}</b></div><div className="request-details"><span>Payment type</span><b>{p.payment_kind||'Appointment payment'}</b></div><div className="request-details"><span>Provider</span><b>{p.provider||'—'}</b></div>{p.payment_link_url&&<p><a href={p.payment_link_url} target="_blank" rel="noreferrer">Open payment link</a></p>}{booking&&!paid&&<div className="appointment-actions"><button className="primary-button" onClick={()=>void reviewPayment(String(booking.id),'received')}>Receive Payment</button><button className="danger-button" onClick={()=>void reviewPayment(String(booking.id),'not_received')}>Payment Not Received</button></div>}</article></div>;
                   }
                   const m=entry.item;
