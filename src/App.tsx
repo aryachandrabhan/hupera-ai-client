@@ -322,6 +322,7 @@ function WorkspaceApp() {
   useEffect(()=>{
     const open=(event:Event)=>{
       const data=(event as CustomEvent).detail||{};
+      delete (window as any).__huperaPendingPush;
       if(data.route==='appointment'){setTab('Appointment');setMobileChatOpen(false);return;}
       if(data.route==='inbox'){
         setTab('Inbox');
