@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Browser } from '@capacitor/browser';
 import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction } from './huperaApi';
 import {
@@ -245,7 +246,17 @@ function WorkspaceApp() {
           if(cancelled)return;
           void refreshWorkspace();
           if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
-          if(notification?.title)notify(notification.title);
+          if(notification?.title){
+            notify(notification.title);
+            void LocalNotifications.schedule({notifications:[{
+              id:Math.floor(Date.now()%2147483000),
+              title:notification.title,
+              body:notification.body||'Open Hupera to view the update',
+              channelId:'hupera_messages',
+              sound:'default',
+              extra:notification.data||{}
+            }]});
+          }
         });
         listeners.push(received);
         const action=await PushNotifications.addListener('pushNotificationActionPerformed',event=>{
@@ -253,10 +264,26 @@ function WorkspaceApp() {
           window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:event?.notification?.data||{}}));
         });
         listeners.push(action);
+        const localAction=await LocalNotifications.addListener('localNotificationActionPerformed',event=>{
+          if(cancelled)return;
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:event?.notification?.extra||{}}));
+        });
+        listeners.push(localAction);
         let permission=await PushNotifications.checkPermissions();
         if(permission.receive!=='granted')permission=await PushNotifications.requestPermissions();
         if(cancelled||permission.receive!=='granted')return;
         await PushNotifications.createChannel({
+          id:'hupera_messages',
+          name:'Hupera messages',
+          description:'WhatsApp messages, appointment and payment updates',
+          importance:5,
+          visibility:1,
+          sound:'default',
+          vibration:true
+        });
+        let localPermission=await LocalNotifications.checkPermissions();
+        if(localPermission.display!=='granted')localPermission=await LocalNotifications.requestPermissions();
+        await LocalNotifications.createChannel({
           id:'hupera_messages',
           name:'Hupera messages',
           description:'WhatsApp messages, appointment and payment updates',
