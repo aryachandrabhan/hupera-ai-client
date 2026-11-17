@@ -286,10 +286,6 @@ function WorkspaceApp() {
     }catch(e){notify(e instanceof Error?e.message:'Could not review payment.');}
   };
 
-  const confirm=()=>updateBookingStatus(active.bookingId||'','confirmed');
-  const reschedule=()=>updateBookingStatus(active.bookingId||'','rescheduled');
-  const cancel=()=>updateBookingStatus(active.bookingId||'','cancelled');
-
   const updateDay=(i:number,p:Partial<Day>)=>setDays(old=>old.map((d,n)=>n===i?{...d,...p}:d));
   const updateBlock=(di:number,id:number,p:Partial<Block>)=>setDays(old=>old.map((d,i)=>i===di?{...d,blocks:d.blocks.map(b=>b.id===id?{...b,...p}:b)}:d));
 
