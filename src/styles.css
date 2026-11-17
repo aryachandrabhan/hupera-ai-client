@@ -489,3 +489,45 @@ button {
 .report-export-menu{position:relative}.report-export-menu summary{list-style:none;cursor:pointer}.report-export-menu:not([open]) .report-export-options{display:none}.report-export-menu summary::-webkit-details-marker{display:none}.report-export-options{position:absolute;right:0;top:calc(100% + 7px);z-index:20;min-width:220px;padding:7px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 14px 35px #0f172a20;display:flex;flex-direction:column;gap:3px}.report-export-options button{display:flex;align-items:center;gap:9px;text-align:left;padding:10px;border:0;border-radius:8px;background:#fff;color:#334155;font-size:12px}.report-export-options button:hover{background:#f1f5f9}
 .report-insights{margin-top:16px}.insight-card{min-height:230px}.insight-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;color:#16a34a}.insight-heading h3{margin:0 0 5px;color:#1e293b;font:750 14px Manrope,sans-serif}.insight-heading p{margin:0;color:#64748b;font-size:11px}.donut-layout{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:18px}.donut-ring{width:142px;height:142px;flex:0 0 142px;border-radius:50%;display:grid;place-items:center;position:relative}.donut-ring>div{width:92px;height:92px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}.donut-ring b{font:800 23px Manrope;color:#17243b}.donut-ring small{font-size:10px;color:#64748b}.donut-legend{flex:1;min-width:125px;display:flex;flex-direction:column;gap:9px}.donut-legend>div{display:grid;grid-template-columns:9px 1fr auto;align-items:center;gap:7px;font-size:11px;color:#64748b}.donut-legend i{width:8px;height:8px;border-radius:50%}.donut-legend b{color:#1e293b}.workload-value{font:800 34px Manrope;color:#15803d;margin:24px 0 12px}.workload-value small{font:500 12px 'DM Sans',sans-serif;color:#64748b}.workload-track{height:11px;border-radius:20px;background:#e2e8f0;overflow:hidden}.workload-track>span{display:block;height:100%;border-radius:20px;background:#16a34a}.workload-legend{display:flex;justify-content:space-between;gap:10px;margin-top:15px;font-size:11px;color:#64748b}.workload-legend b{color:#1e293b}.department-bar{margin-top:14px}.department-bar>div{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px;font-size:11px;color:#475569}.department-bar b{color:#1e293b}.department-bar>i{display:block;height:8px;background:#edf2f7;border-radius:20px;overflow:hidden}.department-bar>i>span{display:block;height:100%;background:#16a34a;border-radius:20px}.daily-volume-chart{width:100%;height:auto;min-height:150px;margin-top:16px;overflow:visible}
 @media(max-width:650px){.home-secondary-metrics{max-width:none;gap:9px}.insight-card{min-height:0}.donut-layout{gap:12px}.donut-ring{width:116px;height:116px;flex-basis:116px}.donut-ring>div{width:76px;height:76px}.donut-ring b{font-size:19px}.workload-legend{font-size:10px}.report-export-menu{width:100%}.report-export-menu>summary{width:100%}.report-export-options{left:0;right:auto}.appointment-request.priority-action-card .appointment-actions button{flex:1 1 40%}}
+
+
+/* Hupera real-time inbox, notification center and multi-person scheduling */
+.notification-wrap{position:relative;display:inline-flex;align-items:center}
+.notification-panel{position:absolute;right:0;top:calc(100% + 10px);width:min(370px,calc(100vw - 24px));max-height:min(70vh,560px);display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid #dfe7f1;border-radius:14px;box-shadow:0 18px 48px rgba(15,23,42,.2);z-index:120}
+.notification-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-bottom:1px solid #e8eef5}
+.notification-panel-head b{font-size:14px;color:#1e293b}
+.notification-panel-head button{border:0;background:transparent;color:#16834f;font-size:11px;font-weight:800;padding:6px}
+.notification-items{overflow-y:auto;overscroll-behavior:contain}
+.notification-item{display:flex;align-items:flex-start;gap:10px;width:100%;min-height:0;padding:12px 14px;text-align:left;border:0;border-bottom:1px solid #edf1f5;background:#fff;color:#334155}
+.notification-item:last-child{border-bottom:0}
+.notification-item.unread{background:#effaf3}
+.notification-item>span{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.notification-item b{font-size:12px;color:#1e293b}
+.notification-item small{font-size:11px;line-height:1.4;color:#64748b;white-space:normal;overflow-wrap:anywhere}
+.notification-item time{font-size:10px;color:#94a3b8}
+.notification-dot{width:8px;height:8px;flex:0 0 8px;margin-top:5px;border-radius:50%;background:#cbd5e1}
+.notification-item.unread .notification-dot{background:#16a34a;box-shadow:0 0 0 3px #dcfce7}
+.notification-empty{padding:28px 16px;text-align:center;color:#94a3b8;font-size:12px}
+.chat-day-divider{display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:1;margin:13px auto 16px;pointer-events:none}
+.chat-day-divider span{padding:5px 12px;border:1px solid #dce8e2;border-radius:20px;background:#edf8f1;color:#24734b;font-size:11px;font-weight:800;box-shadow:0 2px 8px rgba(15,23,42,.06)}
+.chat-row.has-unread{background:#effaf3;border:1px solid #b7e4c7;border-left:4px solid #20a464;margin:4px 5px;width:calc(100% - 10px);border-radius:9px}
+.chat-row.has-unread:hover,.chat-row.has-unread.chosen{background:#e5f7ec;box-shadow:inset 3px 0 #16834f}
+.new-message-badge{display:inline-flex!important;width:max-content;padding:3px 7px;border-radius:5px;background:#d7f3e1;color:#126b43!important;font-size:9px!important;font-weight:800}
+.chat-row.has-unread .unread-count{background:#16834f;color:#fff}
+.assigned-people-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.assigned-people-chips{display:flex;flex-wrap:wrap;gap:6px;min-height:4px}
+.assigned-person-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:6px 8px;border:1px solid #b7e4c7;border-radius:20px;background:#eaf8ef;color:#17643f;font-size:11px;font-weight:700}
+.assigned-person-chip button{display:grid;place-items:center;width:20px;min-height:20px;height:20px;padding:0;border:0;border-radius:50%;background:#d1f0dc;color:#166534}
+.assigned-people-field select{width:100%}
+.dark-theme .notification-panel{background:#151f30;border-color:#35445b}
+.dark-theme .notification-panel-head{border-color:#35445b}
+.dark-theme .notification-panel-head b,.dark-theme .notification-item b{color:#e5edf8}
+.dark-theme .notification-item{background:#151f30;border-color:#29374b;color:#e5edf8}
+.dark-theme .notification-item.unread{background:#173326}
+.dark-theme .notification-item small{color:#a7b5c9}
+.dark-theme .chat-day-divider span{background:#173326;border-color:#245b3c;color:#9be7b8}
+.dark-theme .chat-row.has-unread{background:#173326;border-color:#245b3c}
+.dark-theme .chat-row.has-unread:hover,.dark-theme .chat-row.has-unread.chosen{background:#1d4532}
+.dark-theme .assigned-person-chip{background:#173326;border-color:#245b3c;color:#a7f3c1}
+.dark-theme .assigned-person-chip button{background:#245b3c;color:#d1fae5}
+@media(max-width:650px){.notification-panel{position:fixed;top:64px;right:10px;width:min(370px,calc(100vw - 20px));max-height:calc(100dvh - 150px)}.chat-day-divider{margin:10px auto 13px}}
