@@ -137,7 +137,7 @@ function WorkspaceApp() {
         const stamp=b.starts_at?new Date(b.starts_at):null;
         const validDate=stamp&&!Number.isNaN(stamp.getTime())?stamp:null;
         return {id:String(c.id),conversationId:String(c.id),bookingId:b.id?String(b.id):undefined,
-          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),needsAction:c.needs_action===true,priorityType:c.priority_type?String(c.priority_type):undefined,unreadCount:Number(c.unread_count||0),pendingRequestCount:Number(c.needs_action?Math.max(1,Number(c.pending_booking_count||0)):0),appointments:[],payments:[],initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
+          name:customerName,phone:String(c.customer_phone||b.customer_phone||''),channel:String(c.channel||'whatsapp'),handlingMode:String(c.handling_mode||'AI'),needsAction:c.needs_action===true,priorityType:c.priority_type?String(c.priority_type):undefined,unreadCount:Number(c.unread_count||0),pendingRequestCount:Number(c.pending_booking_count||0),appointments:[],payments:[],initials:customerName.split(/\\s+/).slice(0,2).map((x:string)=>x[0]||'').join('').toUpperCase(),
           status:String(b.status||c.status||'Open').replace(/_/g,' '),
           time:c.last_message_at?new Date(c.last_message_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
           preview:c.last_message||c.subject||'No messages yet',department:b.service_name||b.title||'—',
