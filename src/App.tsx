@@ -6,9 +6,9 @@ import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHupera
 import {
   Activity, ArrowUpRight, Bell, Bot, CalendarCheck, CalendarDays,
   Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, CreditCard,
-  Download, Home, MapPin, MessageCircle, Plus, Search, Send, Settings,
+  Download, Home, MessageCircle, Plus, Search, Send, Settings,
   ShieldCheck, Stethoscope, TrendingDown, TrendingUp,
-  UserRound, Wallet, X, RefreshCw, Users, FileText, Sun, Moon, LogOut
+  Wallet, X, RefreshCw, Users, FileText, Sun, Moon, LogOut
 } from 'lucide-react';
 import './styles.css';
 
@@ -29,10 +29,6 @@ function Trend({down=false}:{down?:boolean}) {
 
 function Metric({icon:Icon,label,value,change,detail,down=false}:{icon:any;label:string;value:string;change:string;detail:string;down?:boolean}) {
   return <div className="metric-card"><div className="metric-top"><span className="metric-icon"><Icon size={18}/></span><span className={'metric-change '+(down?'negative':'positive')}>{down?<TrendingDown size={13}/>:<TrendingUp size={13}/>} {change}</span></div><strong className="metric-value">{value}</strong><b className="metric-label">{label}</b><div className="metric-foot"><small>{detail}</small><Trend down={down}/></div></div>;
-}
-
-function Fact({icon,label,value}:{icon:any;label:string;value:string}) {
-  return <div className="fact"><span>{icon}</span><div><small>{label}</small><b>{value}</b></div></div>;
 }
 
 function WorkspaceApp() {
