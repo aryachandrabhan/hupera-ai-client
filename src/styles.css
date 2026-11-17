@@ -696,3 +696,48 @@ button {
 .dark-theme .reschedule-modal-head p,.dark-theme .reschedule-field {color:#b6c4d8}
 .dark-theme .reschedule-field input {background:#0b1627;border-color:#40536e;color:#f1f5fb;color-scheme:dark}
 @media(max-width:650px){.reschedule-modal{padding:18px;border-radius:16px}.reschedule-modal-actions>*{flex:1}}
+
+
+/* Final dark-mode contrast for inbox title and all report text/surfaces. */
+.dark-theme .inbox-list-head,.dark-theme .inbox-list-head>div{background:#142136!important}
+.dark-theme .inbox-list-head h2{color:#f8fafc!important}
+.dark-theme .inbox-list-head small{color:#9be7c2!important}
+.dark-theme .report-metrics .metric-card,.dark-theme .report-data-panel,.dark-theme .report-visual-card,.dark-theme .report-grid .panel-inner,.dark-theme .report-insights .panel-inner{background:#142136!important;border-color:#2d405a!important;color:#e7edf7!important}
+.dark-theme .report-metrics .metric-value,.dark-theme .report-metrics .metric-label,.dark-theme .report-metrics .metric-top,.dark-theme .report-metrics .metric-foot,.dark-theme .report-metrics .metric-foot small,.dark-theme .report-data-panel .summary-line b,.dark-theme .report-data-panel .summary-line small,.dark-theme .report-visual-card h3,.dark-theme .report-grid .panel-inner h3,.dark-theme .report-insights .panel-inner h3,.dark-theme .report-insights .panel-inner b,.dark-theme .report-insights .panel-inner span,.dark-theme .report-insights .panel-inner small{color:#edf4ff!important}
+.dark-theme .report-metrics .metric-change,.dark-theme .report-data-panel p,.dark-theme .report-visual-card p,.dark-theme .report-grid .panel-inner p,.dark-theme .report-insights .panel-inner p,.dark-theme .report-insights .insight-heading p,.dark-theme .report-insights .donut-legend span,.dark-theme .report-insights .department-bar span{color:#b6c4d8!important}
+.dark-theme .report-visual-card .report-svg text{fill:#e1eaf7!important}
+.dark-theme .report-visual-card .report-svg rect:first-child{fill:#142136!important}
+.dark-theme .report-visual-card .report-svg rect:nth-of-type(2n){fill:#293b55!important}
+
+/* Cashfree subscription payment screen */
+.cashfree-payment-panel{max-width:620px}
+.cashfree-brand-row{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border,#e5ebf2);border-radius:12px}
+.cashfree-brand-row>div{flex:1;min-width:0}
+.cashfree-brand-row b,.cashfree-brand-row small{display:block}
+.cashfree-brand-row b{font-size:13px;color:var(--navy,#17243b)}
+.cashfree-brand-row small{font-size:10px;color:var(--muted,#8794a7);margin-top:4px}
+.cashfree-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;background:#eaf2ff;color:#2868c7}
+.cashfree-secure{display:flex;align-items:center;gap:4px;color:#16865b;font-size:10px;font-weight:700}
+.cashfree-plan-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
+.cashfree-plan-picker button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:15px;border:1px solid var(--border,#e5ebf2);border-radius:12px;background:var(--surface,#fff);color:var(--navy,#17243b);text-align:left}
+.cashfree-plan-picker button.selected{border-color:#3479d3;box-shadow:0 0 0 2px #3479d322;background:#f2f7ff}
+.cashfree-plan-picker b{font-size:11px}
+.cashfree-plan-picker strong{font-size:22px}
+.cashfree-plan-picker small{color:var(--muted,#8794a7);font-size:10px}
+.cashfree-subscription-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:13px 0;border-top:1px solid var(--border,#e5ebf2);border-bottom:1px solid var(--border,#e5ebf2);margin:10px 0 16px;font-size:11px}
+.cashfree-subscription-status span{color:var(--muted,#8794a7);flex:1}
+.cashfree-subscription-status b{text-transform:capitalize}
+.cashfree-subscription-status small{width:100%;color:var(--muted,#8794a7)}
+.cashfree-pay-button,.cashfree-refresh-button{width:100%;justify-content:center;margin-top:9px}
+.cashfree-methods{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}
+.cashfree-methods span{border:1px solid var(--border,#e5ebf2);border-radius:7px;padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted,#68748a)}
+.cashfree-help{display:block;margin-top:10px;color:var(--muted,#8794a7);font-size:10px;line-height:1.5}
+.cashfree-error{margin:10px 0;padding:11px;border:1px solid #efb4b4;background:#fff1f1;color:#b42318;border-radius:9px;font-size:11px}
+.cashfree-notice{margin:10px 0;padding:11px;border:1px solid #9ad6b8;background:#effbf4;color:#176b43;border-radius:9px;font-size:11px}
+.dark-theme .cashfree-brand-row b,.dark-theme .cashfree-plan-picker button,.dark-theme .cashfree-plan-picker b,.dark-theme .cashfree-plan-picker strong,.dark-theme .cashfree-subscription-status b{color:#f1f5fb!important}
+.dark-theme .cashfree-brand-row,.dark-theme .cashfree-plan-picker button{background:#142136;border-color:#34465e}
+.dark-theme .cashfree-plan-picker button.selected{background:#1d3555;border-color:#5792e5}
+.dark-theme .cashfree-brand-row small,.dark-theme .cashfree-plan-picker small,.dark-theme .cashfree-subscription-status span,.dark-theme .cashfree-subscription-status small,.dark-theme .cashfree-help{color:#b6c4d8!important}
+.dark-theme .cashfree-methods span{color:#dce7f6;border-color:#40536e}
+.dark-theme .cashfree-notice{background:#123d30;border-color:#286653;color:#b9f2d4}
+@media(max-width:520px){.cashfree-plan-picker{gap:8px}.cashfree-plan-picker button{padding:12px}.cashfree-plan-picker strong{font-size:19px}.cashfree-secure{font-size:9px}}
