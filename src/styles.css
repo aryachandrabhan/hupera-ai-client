@@ -741,3 +741,15 @@ button {
 .dark-theme .cashfree-methods span{color:#dce7f6;border-color:#40536e}
 .dark-theme .cashfree-notice{background:#123d30;border-color:#286653;color:#b9f2d4}
 @media(max-width:520px){.cashfree-plan-picker{gap:8px}.cashfree-plan-picker button{padding:12px}.cashfree-plan-picker strong{font-size:19px}.cashfree-secure{font-size:9px}}
+
+
+/* Report priority cards are direct siblings of the KPI row. */
+.dark-theme .insight-card .insight-heading h3,
+.dark-theme .insight-card .donut-legend span,
+.dark-theme .insight-card .donut-legend b,
+.dark-theme .insight-card .department-bar span,
+.dark-theme .insight-card .department-bar b,
+.dark-theme .insight-card .donut-ring small {
+  color:#edf4ff!important;
+}
+.dark-theme .insight-card .donut-ring>div { background:#142136!important; color:#f1f5fb!important; }
