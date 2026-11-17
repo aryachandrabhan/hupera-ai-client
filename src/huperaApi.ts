@@ -124,6 +124,18 @@ export async function postHuperaAction<T extends ApiResponse>(
     true
   );
 }
+export async function getCashfreeSubscription(orderId?: string) {
+  const query = orderId ? '?order_id=' + encodeURIComponent(orderId) : '';
+  return request<any>(`${API_BASE}/cashfree-mobile-subscription${query}`, {}, true);
+}
+
+export async function createCashfreeSubscriptionOrder(cycle: 'monthly' | 'annually') {
+  return request<any>(`${API_BASE}/cashfree-mobile-subscription`, {
+    method: 'POST',
+    body: JSON.stringify({ cycle })
+  }, true);
+}
+
 export async function exchangeMobileCode(code: string): Promise<void> {
   const response = await fetch(`${API_BASE}/hupera-mobile-session`, {
     method: 'POST',
