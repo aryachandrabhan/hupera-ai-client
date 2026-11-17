@@ -794,7 +794,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
     {title:'Appointments & revenue',rows:rows.map(([label,value]:any)=>({label:String(label),value:String(String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):value)}))},
     {title:'Appointment status breakdown',rows:statusRows.map((item:any)=>({label:String(item.status||'unknown').replace(/_/g,' '),value:String(item.total??0)}))},
     {title:'Booking sources',rows:sourceRows.map((item:any)=>({label:String(item.source||'unknown'),value:String(item.total??0)}))},
-    {title:'AI workload vs human handover',rows:[{label:'AI replies',value:String(aiHandled)},{label:'Human / staff replies',value:String(humanHandled)},{label:'AI reply share',value:aiReplyShare+'%'}]},
+    {title:'AI workload vs human handover',rows:[{label:'AI replies',value:String(Number(ai.total||0))},{label:'Human / staff replies',value:String(humanResponses)},{label:'AI reply share',value:aiShare.toFixed(1)+'%'}]},
     {title:'Department-wise patient flow',rows:departmentRows.map((item:any)=>({label:String(item.department||'Unassigned'),value:String(item.total??0)}))},
     {title:'Daily incoming message volume',rows:dailyRows.map((item:any)=>({label:String(item.day||'Day'),value:String(item.received_messages??0)}))}
   ];
@@ -805,7 +805,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
     catch(error){setExportStatus(error instanceof Error?error.message:'Report export failed. Please try again.');}
     finally{setExporting('');}
   };
-  const exportSuffix=period.replace(/\\s+/g,'-');
+  const exportSuffix=period.replace(/\s+/g,'-');
 
   const dailyMax=Math.max(1,...dailyRows.map((x:any)=>Number(x.received_messages||0)));
   const dailyPoints=dailyRows.map((x:any,i:number)=>(dailyRows.length>1?40+i*(520/(dailyRows.length-1)):300)+','+(170-(Number(x.received_messages||0)/dailyMax)*130)).join(' ');
