@@ -4,6 +4,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Badge } from '@capawesome/capacitor-badge';
 import { Browser } from '@capacitor/browser';
 import { clearToken, getToken, exchangeMobileCode, getHuperaResource, postHuperaAction } from './huperaApi';
 import {
@@ -214,6 +215,13 @@ function WorkspaceApp() {
   },[tab,mobileChatOpen,settings]);
 
   useEffect(()=>{void refreshWorkspace();},[]);
+
+  useEffect(()=>{
+    if(!Capacitor.isNativePlatform())return;
+    const unread=chats.reduce((total,chat)=>total+Math.max(0,Number(chat.unreadCount||0)),0);
+    void Badge.set({count:unread}).catch(error=>console.warn('Hupera app badge update failed',error));
+  },[chats]);
+
 
   // Native Firebase push registration. Ably remains the foreground real-time transport.
   useEffect(()=>{
