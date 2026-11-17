@@ -62,6 +62,10 @@ function WorkspaceApp() {
   const chatNearBottomRef=useRef(true);
   const lastThreadSnapshotRef=useRef<{conversationId:string;messageId:string}|null>(null);
   const [pendingChatMessages,setPendingChatMessages]=useState(0);
+  const [rescheduleBooking,setRescheduleBooking]=useState<any>(null);
+  const [rescheduleDate,setRescheduleDate]=useState('');
+  const [rescheduleTime,setRescheduleTime]=useState('');
+  const [rescheduleSaving,setRescheduleSaving]=useState(false);
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
   const [availabilityItems,setAvailabilityItems]=useState<any[]>([]);
@@ -599,13 +603,14 @@ function WorkspaceApp() {
 
   const updateBookingStatus=async(bookingId:string,status:'confirmed'|'cancelled'|'rescheduled')=>{
     if(!bookingId){notify('This request is not linked to a booking record.');return;}
-    let startsAt:string|undefined;
     if(status==='rescheduled'){
-      const value=window.prompt('Enter the new date and time (YYYY-MM-DDTHH:mm)');
-      if(!value)return;
-      const parsed=new Date(value);
-      if(!Number.isFinite(parsed.getTime())||parsed<=new Date()){notify('Choose a valid future date and time.');return;}
-      startsAt=parsed.toISOString();
+      const booking=active.appointments.find((item:any)=>String(item.id)===String(bookingId));
+      const current=new Date(booking?.starts_at||Date.now()+86400000);
+      const pad=(value:number)=>String(value).padStart(2,'0');
+      setRescheduleBooking({id:bookingId});
+      setRescheduleDate(current.getFullYear()+'-'+pad(current.getMonth()+1)+'-'+pad(current.getDate()));
+      setRescheduleTime(pad(current.getHours())+':'+pad(current.getMinutes()));
+      return;
     }
     if(status==='cancelled'&&!window.confirm('Cancel this appointment?'))return;
     try{
@@ -614,6 +619,21 @@ function WorkspaceApp() {
       await refreshWorkspace();
       await refreshActiveThread();
     }catch(e){notify(e instanceof Error?e.message:'Could not update appointment.');}
+  };
+
+  const submitReschedule=async()=>{
+    if(!rescheduleBooking?.id||!rescheduleDate||!rescheduleTime){notify('Choose both a date and time.');return;}
+    const parsed=new Date(rescheduleDate+'T'+rescheduleTime);
+    if(!Number.isFinite(parsed.getTime())||parsed<=new Date()){notify('Choose a valid future date and time.');return;}
+    setRescheduleSaving(true);
+    try{
+      await postHuperaAction('booking_status',{booking_id:String(rescheduleBooking.id),status:'rescheduled',starts_at:parsed.toISOString()});
+      setRescheduleBooking(null);
+      notify('Appointment rescheduled.');
+      await refreshWorkspace();
+      await refreshActiveThread();
+    }catch(error){notify(error instanceof Error?error.message:'Could not reschedule appointment.');}
+    finally{setRescheduleSaving(false);}
   };
 
   const reviewPayment=async(bookingId:string,decision:'received'|'not_received')=>{
@@ -762,6 +782,7 @@ function WorkspaceApp() {
           {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} pushError={pushError} nativePlatform={Capacitor.isNativePlatform()}/> }
 
           <footer className="footer"><span>Hupera AI Client · v0.4.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
+          {rescheduleBooking&&<div className="modal-backdrop" role="presentation" onClick={()=>!rescheduleSaving&&setRescheduleBooking(null)}><section className="reschedule-modal" role="dialog" aria-modal="true" aria-labelledby="reschedule-title" onClick={event=>event.stopPropagation()}><div className="reschedule-modal-head"><span className="reschedule-modal-icon"><CalendarDays size={20}/></span><div><h2 id="reschedule-title">Reschedule appointment</h2><p>Select a new appointment date and time.</p></div><button type="button" className="plain-icon" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving} aria-label="Close"><X size={19}/></button></div><label className="reschedule-field"><span><CalendarDays size={15}/> Appointment date</span><input type="date" value={rescheduleDate} min={new Date().toLocaleDateString('en-CA')} onChange={event=>setRescheduleDate(event.target.value)}/></label><label className="reschedule-field"><span><Clock3 size={15}/> Appointment time</span><input type="time" value={rescheduleTime} onChange={event=>setRescheduleTime(event.target.value)}/></label><div className="reschedule-modal-actions"><button type="button" className="outline-button" onClick={()=>setRescheduleBooking(null)} disabled={rescheduleSaving}>Cancel</button><button type="button" className="primary-button" onClick={()=>void submitReschedule()} disabled={rescheduleSaving||!rescheduleDate||!rescheduleTime}>{rescheduleSaving?'Saving…':'Confirm new time'}</button></div></section></div>}
         </main>
       </div>
 
