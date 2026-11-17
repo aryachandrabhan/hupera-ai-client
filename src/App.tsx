@@ -44,6 +44,8 @@ function WorkspaceApp() {
   const [dataLoading,setDataLoading]=useState(true);
   const [dataError,setDataError]=useState('');
   const [unreadNotifications,setUnreadNotifications]=useState(0);
+  const [notifications,setNotifications]=useState<any[]>([]);
+  const [showNotifications,setShowNotifications]=useState(false);
   const [alertsEnabled,setAlertsEnabled]=useState(false);
   const [pushPermission,setPushPermission]=useState('unknown');
   const [search,setSearch]=useState('');
@@ -52,6 +54,7 @@ function WorkspaceApp() {
   const pushTokenRef=useRef('');
   const priorityInitialized=useRef(false);
   const workspaceSyncBusy=useRef(false);
+  const threadSyncBusy=useRef(false);
   const previousPriorityIds=useRef<Set<string>>(new Set());
   const [toast,setToast]=useState('');
   const [days,setDays]=useState(initialDays);
@@ -82,7 +85,7 @@ function WorkspaceApp() {
   const active=chats.find(c=>c.id===selected)||chats[0]||{id:'',conversationId:'',name:'Select a conversation',phone:'',channel:'whatsapp',handlingMode:'AI',needsAction:false,priorityType:undefined,unreadCount:0,appointments:[],payments:[],initials:'?',status:'No conversation selected',time:'',preview:'',department:'—',doctor:'—',date:'—',day:'',slot:'—',format:'—',amount:0,payment:'—',upi:'',messages:[]};
   const human=String(active.handlingMode||'AI').toLowerCase()==='human';
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
-  const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
+  const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.unreadCount||0),Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
 
   const notify=(s:string)=>{
     setToast(s);
@@ -125,6 +128,7 @@ function WorkspaceApp() {
         getHuperaResource<any>('appointments'),getHuperaResource<any>('inbox'),getHuperaResource<any>('reports',{days:period.replace(' days','')}),getHuperaResource<any>('notifications')
       ]);
       setUnreadNotifications(Number(notifications.unread_count||0));
+      setNotifications(Array.isArray(notifications.notifications)?notifications.notifications:[]);
       const bookings=Array.isArray(appointments.appointments)?appointments.appointments:[];
       const conversations=Array.isArray(inbox.conversations)?inbox.conversations:[];
       const mapped:Chat[]=conversations.map((c:any)=>{
@@ -160,13 +164,24 @@ function WorkspaceApp() {
       const schedules=Array.isArray(data.schedules)?data.schedules:[];
       const mapped:Day[]=dayNames.map((name,index)=>{
         const rows=schedules.filter((x:any)=>Number(x.day_of_week)===index+1);
-        return {name,enabled:rows.length>0,blocks:rows.map((x:any,i:number)=>({
-          id:Number(String(x.id||'').replace(/\\D/g,''))||Date.now()+index*100+i,
-          department:String(x.service_name||''),doctors:x.person_name?[String(x.person_name)]:[],
-          from:time12(String(x.start_time||'09:00').slice(0,5)),
-          to:time12(String(x.end_time||'13:00').slice(0,5)),
-          fee:Number(x.fee??x.service_price??0),resourceId:String(x.resource_id||''),serviceId:String(x.service_id||'')
-        }))};
+        const grouped=new Map<string,any>();
+        rows.forEach((x:any,i:number)=>{
+          const start=String(x.start_time||'09:00').slice(0,5),end=String(x.end_time||'13:00').slice(0,5);
+          const fee=Number(x.fee??x.service_price??0);
+          const key=[String(x.service_id||''),start,end,fee,String(x.slot_duration_minutes||''),String(x.buffer_minutes||'')].join('|');
+          let block=grouped.get(key);
+          if(!block){
+            block={id:Date.now()+index*100+i,department:String(x.service_name||''),doctors:[],resourceIds:[],resourceId:'',from:time12(start),to:time12(end),fee,serviceId:String(x.service_id||'')};
+            grouped.set(key,block);
+          }
+          const resourceId=String(x.resource_id||'');
+          if(resourceId&&!block.resourceIds.includes(resourceId)){
+            block.resourceIds.push(resourceId);
+            if(!block.resourceId)block.resourceId=resourceId;
+            if(x.person_name)block.doctors.push(String(x.person_name));
+          }
+        });
+        return {name,enabled:rows.length>0,blocks:Array.from(grouped.values())};
       });
       setDays(mapped);
       setAvailabilityItems(Array.isArray(data.items)?data.items:[]);
@@ -183,12 +198,15 @@ function WorkspaceApp() {
   };
 
   const saveAvailability=async()=>{
-    const schedules=days.flatMap((day,index)=>day.enabled?day.blocks.map(block=>({
-      day_of_week:index+1,start_time:time24(block.from),end_time:time24(block.to),
-      resource_id:block.resourceId,service_id:block.serviceId,fee:block.fee,
-      slot_duration_minutes:Number(slot),buffer_minutes:Number(buffer)
-    })):[]);
-    if(schedules.some((x:any)=>!x.resource_id||!x.service_id)){notify('Choose a saved department and assigned person for every working block.');return;}
+    if(days.some(day=>day.enabled&&day.blocks.some(block=>!block.serviceId||!(Array.isArray(block.resourceIds)&&block.resourceIds.length)&&!block.resourceId))){notify('Choose a department and at least one assigned person for every working block.');return;}
+    const schedules=days.flatMap((day,index)=>day.enabled?day.blocks.flatMap(block=>{
+      const assigned=Array.isArray(block.resourceIds)&&block.resourceIds.length?block.resourceIds:(block.resourceId?[block.resourceId]:[]);
+      return assigned.map(resourceId=>({
+        day_of_week:index+1,start_time:time24(block.from),end_time:time24(block.to),
+        resource_id:resourceId,service_id:block.serviceId,fee:block.fee,
+        slot_duration_minutes:Number(slot),buffer_minutes:Number(buffer)
+      }));
+    }):[]);
     try{
       await postHuperaAction('schedule_save',{
         schedules,timezone,industry:workspace.dashboard?.organization?.industry||'other',
@@ -402,14 +420,18 @@ function WorkspaceApp() {
   };
 
   const refreshActiveThread=async()=>{
-    if(!active.conversationId)return;
-    const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});
-    const messages=(data.messages||[]).map((m:any)=>({
-      id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
-      text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,
-      createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
-    } as Msg));
-    setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
+    if(!active.conversationId||threadSyncBusy.current)return;
+    threadSyncBusy.current=true;
+    try{
+      const data=await getHuperaResource<any>('thread',{conversation_id:active.conversationId});
+      const messages=(data.messages||[]).map((m:any)=>({
+        id:String(m.id||''),from:m.sender_type==='customer'?'customer':(m.sender_type==='human'||m.sender_type==='business')?'human':m.sender_type==='system'?'system':'ai',
+        text:String(m.content||''),type:String(m.message_type||'text'),metadata:m.metadata,
+        createdAt:String(m.created_at||''),time:m.created_at?new Date(m.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):''
+      } as Msg));
+      setChats(old=>old.map(c=>c.id===active.id?{...c,messages,appointments:Array.isArray(data.appointments)?data.appointments:[],payments:Array.isArray(data.payments)?data.payments:[],handlingMode:String(data.conversation?.handling_mode||c.handlingMode),needsAction:data.conversation?.needs_action===true,unreadCount:Number(data.conversation?.unread_count||0)}:c));
+    }catch(error){console.warn('Hupera active chat refresh failed',error);}
+    finally{threadSyncBusy.current=false;}
   };
 
   useEffect(()=>{
@@ -445,7 +467,9 @@ function WorkspaceApp() {
           void refreshWorkspace();
           if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
         });
-        realtime.connection.on('failed',()=>{if(!disposed)setDataError('Realtime connection failed. Check your connection and reopen Hupera.');});
+        realtime.connection.on('connected',()=>{if(!disposed){setDataError('');void refreshWorkspace();if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();}});
+        realtime.connection.on('disconnected',()=>{if(!disposed)setDataError('Live connection interrupted. Automatic inbox sync is active.');});
+        realtime.connection.on('failed',()=>{if(!disposed)setDataError('Realtime connection failed. Automatic inbox sync is active while you reconnect.');});
       }catch(error){
         if(!disposed)console.error('Hupera realtime connection failed',error);
       }
@@ -456,6 +480,21 @@ function WorkspaceApp() {
       if(retryHandle!==undefined)window.clearTimeout(retryHandle);
       try{channel?.unsubscribe();}catch{}
       try{realtime?.close();}catch{}
+    };
+  },[tab,active.conversationId]);
+
+  // Keep inbox and unread counters fresh even if the realtime socket drops or the app resumes from background.
+  useEffect(()=>{
+    const syncVisibleWorkspace=()=>{
+      if(document.hidden)return;
+      void refreshWorkspace();
+      if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
+    };
+    const timer=window.setInterval(syncVisibleWorkspace,5000);
+    document.addEventListener('visibilitychange',syncVisibleWorkspace);
+    return()=>{
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',syncVisibleWorkspace);
     };
   },[tab,active.conversationId]);
 
@@ -511,7 +550,13 @@ function WorkspaceApp() {
         <header className="topbar">
           <div className="mobile-brand"><div className="brand-mark"><Bot size={20}/></div><b>Hupera <span>AI</span></b></div>
           <div className="top-actions">
-            <button className="icon-btn notification-bell" onClick={async()=>{try{await postHuperaAction('notifications_mark_all_read',{});setUnreadNotifications(0);}catch(error){console.warn('Could not mark notifications read',error);}setTab('Inbox');}} aria-label={'Open notifications, '+unreadNotifications+' unread'}><Bell size={18}/>{unreadNotifications>0&&<i className="top-badge">{unreadNotifications>99?'99+':unreadNotifications}</i>}</button>
+            <div className="notification-wrap">
+              <button className="icon-btn notification-bell" onClick={()=>setShowNotifications(value=>!value)} aria-label={'Open notifications, '+unreadNotifications+' unread'} aria-expanded={showNotifications}><Bell size={18}/>{unreadNotifications>0&&<i className="top-badge">{unreadNotifications>99?'99+':unreadNotifications}</i>}</button>
+              {showNotifications&&<div className="notification-panel">
+                <div className="notification-panel-head"><b>Notifications</b><button type="button" onClick={async()=>{try{await postHuperaAction('notifications_mark_all_read',{});setUnreadNotifications(0);setNotifications(old=>old.map(item=>({...item,is_read:true})));}catch(error){console.warn('Could not mark notifications read',error);}}}>Mark all read</button></div>
+                <div className="notification-items">{notifications.length?notifications.map((item:any)=><button type="button" key={item.id} className={'notification-item '+(!item.is_read?'unread':'')} onClick={async()=>{try{await postHuperaAction('notification_read',{notification_id:item.id});}catch(error){console.warn('Could not mark notification read',error);}setNotifications(old=>old.map(value=>value.id===item.id?{...value,is_read:true}:value));setUnreadNotifications(value=>Math.max(0,value-(item.is_read?0:1)));setShowNotifications(false);if(item.conversation_id){setTab('Inbox');setSelected(String(item.conversation_id));setMobileChatOpen(true);}else if(['appointment','booking','payment'].includes(String(item.kind||'').toLowerCase())){setTab('Appointment');setMobileChatOpen(false);}}}><i className="notification-dot"/><span><b>{item.title}</b><small>{item.body}</small><time>{item.created_at?new Date(item.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</time></span></button>):<div className="notification-empty">No notifications yet.</div>}</div>
+              </div>}
+            </div>
             <button className="icon-btn" onClick={toggleTheme} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} title={theme==='light'?'Dark mode':'Light mode'}>
               {theme==='light'?<Moon size={19}/>:<Sun size={19}/>}
             </button>
@@ -564,7 +609,7 @@ function WorkspaceApp() {
               <aside className="inbox-list">
                 <div className="inbox-list-head"><div><h2>AI Inbox Conversations</h2><small>● Live · instant realtime updates</small></div><button className="outline-button" onClick={enableAlerts}>Enable alerts</button></div>
                 <div className="search-field"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customer chats..."/></div>
-                <div className="inbox-chat-list">{filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}</div>
+                <div className="inbox-chat-list">{filtered.map(c=><button className={'chat-row '+(active.id===c.id?'chosen ':'')+(c.needsAction?'priority-chat':'')+(c.unreadCount>0?' has-unread':'')} key={c.id} onClick={()=>{setSelected(c.id);setMobileChatOpen(true);}}><span className="avatar violet">{c.initials}</span><span className="chat-copy"><span className="between"><b>{c.name}</b><small>{c.time}</small></span><p>{c.preview}</p><span className="chat-status">{c.status}</span>{c.needsAction&&<span className="priority-badge">{c.priorityType==='payment_confirmation'?'Payment needs action':'New appointment request'}</span>}{c.unreadCount>0&&!c.needsAction&&<span className="new-message-badge">New message</span>}</span>{c.unreadCount>0&&<i className="unread-count">{c.unreadCount}</i>}</button>)}{filtered.length===0&&<div className="empty-block">{search?'No conversations match your search.':'No conversations have arrived yet.'}</div>}</div>
               </aside>
               <section className="chat-detail">
                 <div className="chat-detail-head"><button type="button" className="mobile-chat-back" onClick={()=>setMobileChatOpen(false)}><ChevronRight size={18}/> Back to inbox</button><span className="avatar violet">{active.initials}</span><span className="chat-person"><b>{active.name}</b><small>{active.channel.toLowerCase().includes('whatsapp')?'WhatsApp':active.channel} · {active.phone||'Phone not available'} · {active.status}</small></span><button className="outline-button" onClick={async()=>{try{await postHuperaAction('conversation_mode',{conversation_id:active.conversationId,mode:human?'AI':'Human'});notify(human?'AI agent resumed for this chat.':'You have taken over this chat. AI replies are paused.');setChats(old=>old.map(c=>c.id===active.id?{...c,handlingMode:human?'AI':'Human',needsAction:false,unreadCount:0}:c));}catch(e){notify(e instanceof Error?e.message:'Could not change conversation mode.');}}}>{human?'🤖 Resume AI Agent':'🤖 AI Active — Click to Take Over'}</button></div>
@@ -574,7 +619,21 @@ function WorkspaceApp() {
                   ...(active.appointments||[]).filter((item:any)=>item.payment_confirmation_requested_at||['reported','awaiting_confirmation','declined'].includes(String(item.payment_status||'').toLowerCase())||!!item.payment_reference).map((item:any)=>({kind:'payment_review',item,at:item.payment_confirmation_requested_at||item.created_at||''})),
                   ...(active.payments||[]).map((item:any)=>({kind:'payment_order',item,at:item.created_at||''})),
                   ...(active.messages||[]).map((item:any,index:number)=>({kind:'message',item,index,at:item.createdAt||item.time||''}))
-                ].sort((a:any,b:any)=>new Date(a.at||0).getTime()-new Date(b.at||0).getTime()).map((entry:any)=>{
+                ].sort((a:any,b:any)=>new Date(a.at||0).getTime()-new Date(b.at||0).getTime()).reduce((items:any[],entry:any)=>{
+                   const date=entry.at?new Date(entry.at):null;
+                   if(date&&!Number.isNaN(date.getTime())){
+                     const dateKey=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');
+                     if(!items.length||items[items.length-1].dateKey!==dateKey){
+                       const today=new Date(),yesterday=new Date(today);yesterday.setDate(today.getDate()-1);
+                       const keyOf=(value:Date)=>[value.getFullYear(),String(value.getMonth()+1).padStart(2,'0'),String(value.getDate()).padStart(2,'0')].join('-');
+                       const label=dateKey===keyOf(today)?'Today':dateKey===keyOf(yesterday)?'Yesterday':date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+                       items.push({kind:'day-divider',key:'day-'+dateKey,label,dateKey});
+                     }
+                     items.push({...entry,dateKey});
+                   }else items.push(entry);
+                   return items;
+                 },[] as any[]).map((entry:any)=>{
+                   if(entry.kind==='day-divider')return <div className="chat-day-divider" key={entry.key}><span>{entry.label}</span></div>;
                   if(entry.kind==='appointment'){
                     const b=entry.item;const status=String(b.status||'pending').toLowerCase();const locked=['confirmed','rescheduled','cancelled','completed','deleted'].includes(status);const bookingAudit=(active.messages||[]).filter((m:any)=>m.type==='appointment_status'&&m.metadata?.booking_id===b.id).slice(-1)[0];
                     return <div className="message-wrap system" key={'appointment-'+b.id}><article className={'appointment-request '+(!locked?'priority-action-card':'')}><div className="request-heading"><CalendarCheck size={17}/><b>Appointment request</b><span className={'status-badge '+(status==='confirmed'?'ok':'neutral')}>{status.replace(/_/g,' ')}</span></div><div className="request-details"><span>Service</span><b>{b.service_name||b.title||'Appointment'}</b></div><div className="request-details"><span>Date & time</span><b>{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Awaiting slot selection'}</b></div><div className="request-details"><span>Assigned person</span><b>{b.resource_name||'Not assigned'}</b></div><div className="request-details"><span>Amount</span><b>{new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(b.amount||0))}</b></div><div className="request-details"><span>Reference</span><b>{b.reference_code||'—'}</b></div>{locked?<div className="action-audit"><CheckCircle2 size={14}/> {status==='confirmed'?'Confirmed':status==='cancelled'?'Cancelled':status==='completed'?'Completed':'Closed'} · {bookingAudit?'Updated by '+String(bookingAudit.metadata?.actor_user_id||'workspace staff')+' · '+bookingAudit.time:(b.updated_at?new Date(b.updated_at).toLocaleString('en-IN'):'Saved in workspace')}</div>:<div className="appointment-actions"><button className="primary-button" onClick={()=>void updateBookingStatus(String(b.id),'confirmed')}><Check size={14}/> Confirm Booking</button><button className="outline-button" onClick={()=>void updateBookingStatus(String(b.id),'rescheduled')}><RefreshCw size={14}/> Reschedule</button><button className="danger-button" onClick={()=>void updateBookingStatus(String(b.id),'cancelled')}><X size={14}/> Cancel</button></div>}</article></div>;
@@ -618,11 +677,16 @@ function AppointmentPage(p:any) {
   const services=(items||[]).filter((x:any)=>x.kind==='service'&&x.active!==false);
   const people=(items||[]).filter((x:any)=>x.kind==='person'&&x.active!==false);
   const copyTo=(from:number,to:number)=>{
-    setDays((old:Day[])=>old.map((d,i)=>i===to?{...d,enabled:old[from].enabled,blocks:old[from].blocks.map(b=>({...b,id:Date.now()+Math.random(),doctors:[...b.doctors]}))}:d));
+    setDays((old:Day[])=>old.map((d,i)=>i===to?{...d,enabled:old[from].enabled,blocks:old[from].blocks.map(b=>({...b,id:Date.now()+Math.random(),doctors:[...b.doctors],resourceIds:[...(b.resourceIds|| (b.resourceId?[b.resourceId]:[]))]}))}:d));
     notify(days[from].name+' schedule copied to '+days[to].name+'.');
   };
+  const assignedIds=(block:Block)=>Array.isArray(block.resourceIds)&&block.resourceIds.length?block.resourceIds:(block.resourceId?[block.resourceId]:[]);
+  const updateAssignedPeople=(di:number,block:Block,nextIds:string[])=>{
+    const unique=[...new Set(nextIds)];
+    updateBlock(di,block.id,{resourceIds:unique,resourceId:unique[0]||'',doctors:people.filter((person:any)=>unique.includes(String(person.id))).map((person:any)=>String(person.name))});
+  };
   const addBlock=(day:Day)=>{
-    setDays((old:Day[])=>old.map(d=>d.name===day.name?{...d,blocks:[...d.blocks,{id:Date.now()+Math.random(),department:'',doctors:[],from:'09:00 AM',to:'01:00 PM',fee:0,resourceId:'',serviceId:''}]}:d));
+    setDays((old:Day[])=>old.map(d=>d.name===day.name?{...d,blocks:[...d.blocks,{id:Date.now()+Math.random(),department:'',doctors:[],from:'09:00 AM',to:'01:00 PM',fee:0,resourceId:'',resourceIds:[],serviceId:''}]}:d));
   };
   return <section className="appointment-page">
     <div className="panel config-panel">
@@ -647,7 +711,7 @@ function AppointmentPage(p:any) {
         <div className="block-top"><span className="block-label">WORKING SHIFT</span><button className="plain-icon" onClick={()=>updateDay(di,{blocks:day.blocks.filter(x=>x.id!==b.id)})}><X size={16}/></button></div>
         <div className="block-grid">
           <label className="wide-field">Department / service<select value={b.serviceId} onChange={e=>{const item=services.find((x:any)=>x.id===e.target.value);updateBlock(di,b.id,{serviceId:e.target.value,department:item?.name||''});}}><option value="">Select from Business Info</option>{services.map((item:any)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="wide-field">Assigned person<select value={b.resourceId} onChange={e=>updateBlock(di,b.id,{resourceId:e.target.value,doctors:people.filter((x:any)=>x.id===e.target.value).map((x:any)=>x.name)})}><option value="">Select a team member</option>{people.map((person:any)=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+          <div className="wide-field assigned-people-field"><span className="field-label">Assigned people</span><div className="assigned-people-chips">{assignedIds(b).map(id=>{const person=people.find((x:any)=>String(x.id)===id);return <span className="assigned-person-chip" key={id}>{person?.name||'Assigned team member'}<button type="button" aria-label={'Remove '+(person?.name||'assigned person')} onClick={()=>updateAssignedPeople(di,b,assignedIds(b).filter(value=>value!==id))}><X size={13}/></button></span>})}</div><select value="" onChange={e=>{const id=e.target.value;if(id)updateAssignedPeople(di,b,[...assignedIds(b),id]);}}><option value="">Add team member…</option>{people.filter((person:any)=>!assignedIds(b).includes(String(person.id))).map((person:any)=><option key={person.id} value={person.id}>{person.name}</option>)}</select></div>
           <label>From<input type="time" value={time24(b.from)} onChange={e=>updateBlock(di,b.id,{from:time12(e.target.value)})}/></label>
           <label>To<input type="time" value={time24(b.to)} onChange={e=>updateBlock(di,b.id,{to:time12(e.target.value)})}/></label>
           <label>Fee (₹)<input type="number" min="0" value={b.fee} onChange={e=>updateBlock(di,b.id,{fee:Number(e.target.value)})}/></label>
