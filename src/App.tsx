@@ -614,7 +614,7 @@ function WorkspaceApp() {
     }
     if(status==='cancelled'&&!window.confirm('Cancel this appointment?'))return;
     try{
-      await postHuperaAction('booking_status',{booking_id:bookingId,status,...(startsAt?{starts_at:startsAt}:{})});
+      await postHuperaAction('booking_status',{booking_id:bookingId,status});
       notify('Appointment '+status+'.');
       await refreshWorkspace();
       await refreshActiveThread();
