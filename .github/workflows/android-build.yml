@@ -64,7 +64,7 @@ jobs:
           PY
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web application
         run: npm run build
@@ -119,6 +119,25 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+
+      - name: Verify final APK manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_DIR" ]; then
+            echo "::error::Android SDK path is unavailable."
+            exit 1
+          fi
+          BUILD_TOOLS="$(find "$SDK_DIR/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$BUILD_TOOLS/aapt" dump xmltree "$APK" AndroidManifest.xml > /tmp/hupera-apk-manifest.txt
+          grep -q "com.hupera.ai.client" /tmp/hupera-apk-manifest.txt
+          grep -q "android.intent.action.VIEW" /tmp/hupera-apk-manifest.txt
+          grep -q "hupera" /tmp/hupera-apk-manifest.txt
+          grep -q "auth" /tmp/hupera-apk-manifest.txt
+          grep -q "android.permission.POST_NOTIFICATIONS" /tmp/hupera-apk-manifest.txt
+          echo "SUCCESS: final APK includes Hupera auth deep link and Android notification permission."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
