@@ -15,6 +15,7 @@ import {
   Wallet, X, RefreshCw, Users, FileText, Sun, Moon, LogOut
 } from 'lucide-react';
 import './styles.css';
+import { exportReportCsv, exportReportPdf, exportReportPng, type ReportExportSection } from './reportExports';
 
 type Tab = 'Home'|'Inbox'|'Appointment'|'Reports'|'Settings';
 type Msg = {id?:string;from:'customer'|'ai'|'human'|'system';text:string;time:string;type?:string;createdAt?:string;metadata?:any};
@@ -774,6 +775,8 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
 }
 
 function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
+  const [exporting,setExporting]=useState('');
+  const [exportStatus,setExportStatus]=useState('');
   const bookings=reports?.appointments||{},messages=reports?.messages||{},revenue=reports?.revenue||{},customers=reports?.customers||{},conversations=reports?.conversations||{},ai=reports?.ai_responses||{},conversions=reports?.conversions||{},leads=reports?.leads||{};
   const currency=reports?.currency||'INR';
   const money=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(Number.isFinite(Number(v))?Number(v):0);
@@ -783,16 +786,27 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   const rows=[
     ['Period (days)',reports?.period_days??period],['Appointments',bookings.total??0],['Pending appointments',bookings.pending??0],['Confirmed appointments',bookings.confirmed??0],['Cancelled appointments',bookings.cancelled??0],['Completed appointments',bookings.completed??0],['Upcoming appointments',bookings.upcoming??0],['Customers',customers.total??0],['Conversations',conversations.total??0],['Leads',leads.total??0],['Converted leads',conversions.total??0],['Lead conversion rate (%)',conversionRate.toFixed(1)],['Revenue collected',revenue.collected_value??0],['Booked value',revenue.booked_value??0],['Customer messages',messages.received??0],['AI responses',ai.total??0],['Human / staff responses',humanResponses],['AI share of staff responses (%)',aiShare.toFixed(1)]
   ];
-  const exportCsv=()=>{
-    if(!reports)return;
-    const csv=[['Metric','Value'],...rows].map(row=>row.map(value=>'"'+String(value??'').replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
-    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-    const link=document.createElement('a');link.href=url;link.download='hupera-report-'+period.replace(/\\s+/g,'-')+'.csv';link.click();URL.revokeObjectURL(url);
-  };
   const statusRows=Array.isArray(reports?.status_breakdown)?reports.status_breakdown:[];
   const sourceRows=Array.isArray(reports?.source_breakdown)?reports.source_breakdown:[];
   const departmentRows=Array.isArray(reports?.department_breakdown)?reports.department_breakdown:[];
   const dailyRows=Array.isArray(reports?.daily)?reports.daily:[];
+  const exportSections:ReportExportSection[]=[
+    {title:'Appointments & revenue',rows:rows.map(([label,value]:any)=>({label:String(label),value:String(String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):value)}))},
+    {title:'Appointment status breakdown',rows:statusRows.map((item:any)=>({label:String(item.status||'unknown').replace(/_/g,' '),value:String(item.total??0)}))},
+    {title:'Booking sources',rows:sourceRows.map((item:any)=>({label:String(item.source||'unknown'),value:String(item.total??0)}))},
+    {title:'AI workload vs human handover',rows:[{label:'AI replies',value:String(aiHandled)},{label:'Human / staff replies',value:String(humanHandled)},{label:'AI reply share',value:aiReplyShare+'%'}]},
+    {title:'Department-wise patient flow',rows:departmentRows.map((item:any)=>({label:String(item.department||'Unassigned'),value:String(item.total??0)}))},
+    {title:'Daily incoming message volume',rows:dailyRows.map((item:any)=>({label:String(item.day||'Day'),value:String(item.received_messages??0)}))}
+  ];
+  const runExport=async(format:string,action:()=>Promise<string>)=>{
+    if(exporting)return;
+    setExporting(format);setExportStatus('Preparing '+format+' report…');
+    try{setExportStatus(await action());}
+    catch(error){setExportStatus(error instanceof Error?error.message:'Report export failed. Please try again.');}
+    finally{setExporting('');}
+  };
+  const exportSuffix=period.replace(/\\s+/g,'-');
+
   const dailyMax=Math.max(1,...dailyRows.map((x:any)=>Number(x.received_messages||0)));
   const dailyPoints=dailyRows.map((x:any,i:number)=>(dailyRows.length>1?40+i*(520/(dailyRows.length-1)):300)+','+(170-(Number(x.received_messages||0)/dailyMax)*130)).join(' ');
   const aiHandled=Number(ai.total||0),humanHandled=humanResponses,aiReplyShare=aiHandled+humanHandled?Math.round(aiHandled/(aiHandled+humanHandled)*100):0;
@@ -801,9 +815,9 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   const donutStops=statusRows.map((item:any)=>{const pct=Number(bookings.total||0)?Number(item.total||0)/Number(bookings.total)*100:0;const start=donutCursor;donutCursor+=pct;return (donutColors[String(item.status||'').toLowerCase()]||'#94a3b8')+' '+start+'% '+donutCursor+'%';}).join(',');
   const chartValues=statusRows.map((x:any)=>({label:String(x.status||'Other').replace(/_/g,' '),value:Number(x.total||0)}));
   const maxChart=Math.max(1,...chartValues.map((x:any)=>x.value));
-  const exportPng=()=>{const svg=document.getElementById('hupera-report-visual') as SVGSVGElement|null;if(!svg)return;const copy=svg.cloneNode(true) as SVGSVGElement;copy.setAttribute('xmlns','http://www.w3.org/2000/svg');const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)],{type:'image/svg+xml;charset=utf-8'}));const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=1400;canvas.height=700;const ctx=canvas.getContext('2d');if(ctx){ctx.fillStyle='#fff';ctx.fillRect(0,0,1400,700);ctx.drawImage(img,0,0,1400,700);const link=document.createElement('a');link.download='hupera-analytics-'+period.replace(/\\s+/g,'-')+'.png';link.href=canvas.toDataURL('image/png');link.click();}URL.revokeObjectURL(url);};img.onerror=()=>URL.revokeObjectURL(url);img.src=url;};
   return <section className="panel module-panel">
     <div className="toolbar"><div><h2>Performance overview</h2><p>Metrics from this organisation's live database.</p></div><select value={period} onChange={e=>setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></div>
+    {exportStatus&&<p className="muted-copy" role="status" aria-live="polite">{exportStatus}</p>}
     {!reports?<div className="empty-block">Report data is not available yet. It will load automatically when the next workspace sync completes.</div>:<>
       <div className="stats-grid report-metrics">
         <Metric icon={CalendarCheck} label="Appointments" value={String(bookings.total??0)} change="Live" detail={period}/>
@@ -813,7 +827,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
         <Metric icon={MessageCircle} label="Human responses" value={String(humanResponses)} change="Live" detail="staff sent messages"/>
       </div>
       <div className="panel-inner report-data-panel">
-        <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><details className="report-export-menu"><summary className="outline-button"><Download size={14}/> Export Report</summary><div className="report-export-options"><button onClick={()=>window.print()}><FileText size={14}/> Export as PDF</button><button onClick={exportCsv}><Download size={14}/> Export as CSV / Excel</button><button onClick={exportPng}><Download size={14}/> Download as PNG</button></div></details></div>
+        <div className="section-title inside"><div><h3>Appointments & revenue</h3><p>Real totals for the selected reporting period.</p></div><details className="report-export-menu"><summary className="outline-button"><Download size={14}/> Export Report</summary><div className="report-export-options"><button type="button" disabled={!!exporting} onClick={()=>void runExport('PDF',()=>exportReportPdf('hupera-report-'+exportSuffix+'.pdf','Hupera AI — Workspace Report',period+' · Live workspace data',exportSections))}><FileText size={14}/> {exporting==='PDF'?'Preparing PDF…':'Export as PDF'}</button><button type="button" disabled={!!exporting} onClick={()=>void runExport('CSV',()=>exportReportCsv('hupera-report-'+exportSuffix+'.csv',exportSections))}><Download size={14}/> {exporting==='CSV'?'Preparing CSV…':'Export as CSV / Excel'}</button><button type="button" disabled={!!exporting} onClick={()=>void runExport('PNG',()=>exportReportPng('hupera-report-'+exportSuffix+'.png','Hupera AI — Workspace Report',period+' · Live workspace data',exportSections))}><Download size={14}/> {exporting==='PNG'?'Preparing PNG…':'Download as PNG'}</button></div></details></div>
         {rows.map(([label,value])=><div className="summary-line" key={String(label)}><div><small>{label}</small><b>{String(label).toLowerCase().includes('revenue')||String(label).toLowerCase().includes('value')?money(value):String(value)}</b></div></div>)}
       </div>
       <div className="report-visual-card"><div className="section-title inside"><div><h3>Workspace performance</h3><p>Visualised from live reporting totals.</p></div></div><svg id="hupera-report-visual" className="report-svg" viewBox="0 0 1200 560" role="img" aria-label="Appointment status bars and AI versus team response line"><rect width="1200" height="560" rx="24" fill="#f7f9ff"/><text x="48" y="54" fontSize="25" fontWeight="700" fill="#1b2a44">Appointment status</text>{chartValues.slice(0,6).map((v:any,i:number)=><g key={v.label}><text x="48" y={112+i*58} fontSize="18" fill="#52627a">{v.label}</text><rect x="260" y={91+i*58} width="650" height="25" rx="12" fill="#e4eaf5"/><rect x="260" y={91+i*58} width={650*v.value/maxChart} height="25" rx="12" fill="#3976d7"/><text x="930" y={112+i*58} fontSize="18" fontWeight="700" fill="#1b2a44">{v.value}</text></g>)}<text x="48" y="475" fontSize="25" fontWeight="700" fill="#1b2a44">AI vs team responses</text><path d="M300 470 L650 390 L1000 470" fill="none" stroke="#12a37a" strokeWidth="5" strokeLinecap="round"/><circle cx="300" cy="470" r="10" fill="#3976d7"/><circle cx="650" cy="390" r="10" fill="#12a37a"/><circle cx="1000" cy="470" r="10" fill="#3976d7"/><text x="270" y="525" fontSize="18" fill="#52627a">AI {Number(ai.total||0)}</text><text x="600" y="355" fontSize="18" fill="#52627a">Combined responses {Number(ai.total||0)+humanResponses}</text><text x="950" y="525" fontSize="18" fill="#52627a">Team {humanResponses}</text></svg></div>
