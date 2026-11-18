@@ -33,7 +33,10 @@ async function request<T extends ApiResponse>(
   }
 
   if (!response.ok) {
-    throw new Error(data.error || 'Something went wrong. Please try again.');
+    const error = new Error(data.error || 'Something went wrong. Please try again.') as Error & { status?: number; code?: string };
+    error.status = response.status;
+    error.code = String((data as any).code || '');
+    throw error;
   }
 
   return data;
