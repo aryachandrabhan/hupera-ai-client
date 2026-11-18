@@ -127,7 +127,8 @@ function WorkspaceApp() {
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
   const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.unreadCount||0),Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
   const unreadNotificationItems=notifications.filter((item:any)=>!item.is_read).length;
-  const bellBadgeCount=pendingReviewCount+Math.max(0,unreadNotifications-unreadNotificationItems)+notifications.filter((item:any)=>!item.is_read&&!item.conversation_id).length;
+  const notificationsNotCoveredByInbox=notifications.filter((item:any)=>!item.is_read&&(!item.conversation_id||!chats.some(chat=>chat.id===String(item.conversation_id)&&(Number(chat.unreadCount||0)>0||Number(chat.pendingRequestCount||0)>0||chat.needsAction)))).length;
+  const bellBadgeCount=pendingReviewCount+notificationsNotCoveredByInbox+Math.max(0,unreadNotifications-unreadNotificationItems);
 
   useEffect(()=>{
     chatNearBottomRef.current=true;
@@ -773,7 +774,7 @@ function WorkspaceApp() {
           <div className="mobile-brand"><div className="brand-mark"><Bot size={20}/></div><b>Hupera <span>AI</span></b></div>
           <div className="top-actions">
             <div className="notification-wrap">
-              <button className="icon-btn notification-bell" onClick={()=>setShowNotifications(value=>!value)} aria-label={'Open notifications, '+unreadNotifications+' unread'} aria-expanded={showNotifications}><Bell size={18}/>{bellBadgeCount>0&&<i className="top-badge">{bellBadgeCount>99?'99+':bellBadgeCount}</i>}</button>
+              <button className="icon-btn notification-bell" onClick={()=>setShowNotifications(value=>!value)} aria-label={'Open notifications, '+bellBadgeCount+' unread or pending'} aria-expanded={showNotifications}><Bell size={18}/>{bellBadgeCount>0&&<i className="top-badge">{bellBadgeCount>99?'99+':bellBadgeCount}</i>}</button>
               {showNotifications&&<div className="notification-panel">
                 <div className="notification-panel-head"><b>Notifications</b><button type="button" onClick={async()=>{try{await postHuperaAction('notifications_mark_all_read',{});setUnreadNotifications(0);setNotifications(old=>old.map(item=>({...item,is_read:true})));}catch(error){console.warn('Could not mark notifications read',error);}}}>Mark all read</button></div>
                 <div className="notification-items">{notifications.length?notifications.map((item:any)=><button type="button" key={item.id} className={'notification-item '+(!item.is_read?'unread':'')} onClick={async()=>{try{await postHuperaAction('notification_read',{notification_id:item.id});}catch(error){console.warn('Could not mark notification read',error);}setNotifications(old=>old.map(value=>value.id===item.id?{...value,is_read:true}:value));setUnreadNotifications(value=>Math.max(0,value-(item.is_read?0:1)));setShowNotifications(false);setTab('Inbox');setShowNotifications(false);if(item.conversation_id){pendingPushConversationRef.current=String(item.conversation_id);setSelected('');setMobileChatOpen(false);void refreshWorkspace();}else{setMobileChatOpen(false);void refreshWorkspace();}}}><i className="notification-dot"/><span><b>{item.title}</b><small>{item.body}</small><time>{item.created_at?new Date(item.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</time></span></button>):<div className="notification-empty">No notifications yet.</div>}</div>
