@@ -107,6 +107,9 @@ function WorkspaceApp() {
   const [period,setPeriod]=useState('7 days');
   const [settings,setSettings]=useState('Business profile');
   const [cashfreePaymentData,setCashfreePaymentData]=useState<any>(null);
+  const [subscriptionRequired,setSubscriptionRequired]=useState('');
+  const profilePhotoInput=useRef<HTMLInputElement|null>(null);
+  const [profilePhotoBusy,setProfilePhotoBusy]=useState(false);
 
   // Theme preference is saved on this device/browser.
   const [theme,setTheme]=useState<'light'|'dark'>(() => {
@@ -270,7 +273,7 @@ function WorkspaceApp() {
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
       if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
-    }catch(e){setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
+    }catch(e){const error=e as Error&{code?:string};if(error.code==='SUBSCRIPTION_REQUIRED'){setSubscriptionRequired(error.message);setDataError('');}else setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
     finally{setDataLoading(false);workspaceSyncBusy.current=false;}
   };
 
@@ -604,8 +607,8 @@ function WorkspaceApp() {
           if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();
         });
         realtime.connection.on('connected',()=>{if(!disposed){setDataError('');void refreshWorkspace();if(tab==='Inbox'&&active.conversationId)void refreshActiveThread();}});
-        realtime.connection.on('disconnected',()=>{if(!disposed)setDataError('Live connection interrupted. Automatic inbox sync is active.');});
-        realtime.connection.on('failed',()=>{if(!disposed)setDataError('Realtime connection failed. Automatic inbox sync is active while you reconnect.');});
+        realtime.connection.on('disconnected',()=>{if(!disposed)console.info('Hupera realtime disconnected; background inbox sync remains active.');});
+        realtime.connection.on('failed',()=>{if(disposed)return;console.warn('Hupera realtime entered failed state; retrying while polling remains active.');setDataError('');if(retryHandle!==undefined)window.clearTimeout(retryHandle);retryHandle=window.setTimeout(()=>{if(disposed)return;try{channel?.unsubscribe();}catch{}try{realtime?.close();}catch{}channel=null;realtime=null;void connect();},10000);});
       }catch(error){
         if(!disposed)console.error('Hupera realtime connection failed',error);
       }
@@ -772,11 +775,6 @@ function WorkspaceApp() {
                 {(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at)>=new Date()&&!['cancelled','declined'].includes(String(b.status||'').toLowerCase())).sort((a:any,b:any)=>new Date(a.starts_at).getTime()-new Date(b.starts_at).getTime()).slice(0,5).map((b:any)=><div className="mini-booking" key={b.id} role={b.conversation_id?'button':undefined} tabIndex={b.conversation_id?0:undefined} onClick={()=>{if(b.conversation_id){setSelected(String(b.conversation_id));setTab('Inbox');setMobileChatOpen(true);}}}><span className="avatar violet">{String(b.customer_name||'C').split(' ').map((x:string)=>x[0]).join('').slice(0,2)}</span><span className="mini-booking-info"><b>{b.customer_name||'Customer'}</b><small>{[b.service_name||b.title,b.resource_name].filter(Boolean).join(' · ')||'Appointment'}</small></span><b className="booking-time">{b.starts_at?new Date(b.starts_at).toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}</b></div>)}{!dataLoading&&(workspace.appointments||[]).filter((b:any)=>b.starts_at&&new Date(b.starts_at)>=new Date()&&!['cancelled','declined'].includes(String(b.status||'').toLowerCase())).length===0&&<p className="muted-copy">No appointments scheduled for today.</p>}
               </section>
             </div>
-            <section className="panel activity-panel">
-              <div className="section-title inside"><h2>Recent activity</h2><small>Workspace audit events</small></div>
-              {(workspace.dashboard?.recent_activity||[]).map((event:any)=><div className="activity-row" key={event.id}><span className="activity-icon"><Activity size={17}/></span><span className="activity-text"><b>{String(event.action||'Workspace update').replace(/[._]/g,' ')}</b><small>{event.resource_type||'Workspace'} · {event.resource_id||''}</small></span><time>{event.created_at?new Date(event.created_at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):''}</time></div>)}
-              {!workspace.dashboard?.recent_activity?.length&&<p className="muted-copy">No recent activity recorded.</p>}
-            </section>
           </>}
 
           {tab==='Inbox'&&<>
@@ -1000,7 +998,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
 }
 
 function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,enableAlerts,settingsData,saving,onSave,alertsEnabled,pushPermission,pushError,nativePlatform,paymentData,onRefreshPayment}:{employees:any[];section:string;setSection:(s:string)=>void;onLogout:()=>void;theme:'light'|'dark';toggleTheme:()=>void;enableAlerts:()=>void;settingsData:any;saving:boolean;onSave:(organization:any,preferences:any)=>void;alertsEnabled:boolean;pushPermission:string;pushError:string;nativePlatform:boolean;paymentData:any;onRefreshPayment:(orderId?:string)=>Promise<any>}) {
-  const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Payments','Cashfree subscription gateway'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Appearance','App theme'],['Google Calendar','Calendar connection status']];
+  const items=[['Business profile','Business details'],['WhatsApp integration','Connected channel status'],['AI Workforce','Configured AI employees'],['Appointment Payment Setup & Deposit Rules','UPI, QR and appointment deposits'],['Payments','Cashfree subscription gateway'],['Team & permissions','Workspace access'],['Notifications','Device alerts and preferences'],['Google Calendar','Calendar connection status']];
   const org=settingsData?.organization||{},prefs=settingsData?.preferences||{},integrations=settingsData?.integrations||{};
   const [draft,setDraft]=useState<any>({});
   const [preferences,setPreferences]=useState<any>({});
@@ -1065,7 +1063,6 @@ function SettingsPage({employees,section,setSection,onLogout,theme,toggleTheme,e
         </div>}
         {section==='Team & permissions'&&<><p>Current role for this authenticated workspace.</p><div className="summary-line"><div><small>Workspace role</small><b>{org.role||'Workspace member'}</b></div></div><div className="summary-line"><div><small>Business workspace</small><b>{org.name||'—'}</b></div></div><p>Team invitations and role changes require the organisation's team-management permission API, which is not exposed to this mobile session yet.</p></>}
         {section==='Notifications'&&<><p>Enable native Firebase push alerts on this Android device. Notifications are delivered to the app, not through browser alerts.</p><button className="primary-button" onClick={()=>void enableAlerts()}><Bell size={15}/> {alertsEnabled?'Re-register this device':'Enable device alerts'}</button><div className="summary-line"><div><small>Device permission</small><b>{nativePlatform?(pushPermission==='registered'?'Allowed · device registered':pushPermission==='granted'?'Allowed · registering':pushPermission==='denied'?'Blocked in Android settings':pushPermission==='registration_failed'?'Registration failed':pushPermission):typeof Notification!=='undefined'?Notification.permission:'Not supported'}</b>{!!pushError&&<small style={{color:'#dc2626',display:'block',marginTop:6,overflowWrap:'anywhere'}}>Details: {pushError}</small>}</div></div><div className="summary-line"><div><small>Email notifications</small><b>{preferences.email_notifications===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.email_notifications!==false} onChange={e=>setPreferences((old:any)=>({...old,email_notifications:e.target.checked}))}/></div><div className="summary-line"><div><small>Task alerts</small><b>{preferences.task_alerts===false?'Off':'On'}</b></div><input type="checkbox" checked={preferences.task_alerts!==false} onChange={e=>setPreferences((old:any)=>({...old,task_alerts:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save notification preferences</button></>}
-        {section==='Appearance'&&<><p>Choose the appearance of this app on this device.</p><div className="summary-line"><div><small>Current theme</small><b>{theme==='dark'?'Dark':'Light'}</b></div></div><button className="outline-button" onClick={toggleTheme}>{theme==='dark'?'Switch to light theme':'Switch to dark theme'}</button><div className="summary-line"><div><small>Compact mode</small><b>{preferences.compact_mode?'On':'Off'}</b></div><input type="checkbox" checked={!!preferences.compact_mode} onChange={e=>setPreferences((old:any)=>({...old,compact_mode:e.target.checked}))}/></div><button className="primary-button" disabled={saving} onClick={()=>onSave({},preferences)}>Save appearance preferences</button></>}
         {section==='Google Calendar'&&<><p>Calendar integration status for this workspace.</p><div className="integration-state"><CalendarCheck/><div><b>{integrations.calendar?.connected_email?'Connected':'Not connected'}</b><small>{integrations.calendar?.connected_email||'No Google Calendar account is connected.'}</small></div></div></>}
         <div style={{marginTop:28,paddingTop:20,borderTop:'1px solid var(--settings-divider, #e5eaf1)'}}><h3 style={{marginTop:0}}>Account</h3><p>Sign out and clear the Hupera mobile session.</p><button className="danger-button" onClick={onLogout}><LogOut size={16}/> Logout</button></div>
       </div>
