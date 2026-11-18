@@ -824,3 +824,5 @@ button {
   .inbox-panel:not(.mobile-chat-open) .inbox-chat-list{padding-bottom:calc(14px + env(safe-area-inset-bottom));scroll-padding-bottom:calc(14px + env(safe-area-inset-bottom))}
   .main-area{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 }
+
+@media(max-width:650px){.profile.profile-avatar-trigger{display:flex!important;align-items:center;justify-content:center;margin-left:8px}.profile-avatar-trigger .profile-label{display:none}}
