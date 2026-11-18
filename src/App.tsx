@@ -184,9 +184,25 @@ function WorkspaceApp() {
   const refreshCashfreePayment=async(orderId?:string)=>{
     const result=await getCashfreeSubscription(orderId);
     setCashfreePaymentData(result);
+    const subscription=result?.subscription||{};
+    const status=String(subscription.status||'').toLowerCase();
+    const end=subscription.current_period_end?new Date(subscription.current_period_end).getTime():0;
+    if(!subscription.owner_entitlement&&(!['active','trialing'].includes(status)||!end||end<=Date.now())){
+      setSubscriptionRequired('Your Hupera AI trial or subscription has expired. Purchase a subscription to unlock all workspace features.');
+    }else if(subscription.owner_entitlement||(['active','trialing'].includes(status)&&end>Date.now())){
+      setSubscriptionRequired('');
+    }
     if(result?.reconciliation?.paid)notify('Payment verified. Your Hupera AI subscription is active.');
     return result;
   };
+
+  useEffect(()=>{
+    const verifySubscription=()=>{if(document.hidden)return;void refreshCashfreePayment().catch(error=>console.warn('Hupera subscription status refresh failed',error));};
+    void refreshCashfreePayment().catch(error=>console.warn('Hupera initial subscription check failed',error));
+    const timer=window.setInterval(verifySubscription,60000);
+    document.addEventListener('visibilitychange',verifySubscription);
+    return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',verifySubscription);};
+  },[]);
 
   useEffect(()=>{
     if(tab==='Settings'&&settings==='Payments'){
@@ -840,6 +856,7 @@ function WorkspaceApp() {
 
       <nav className="mobile-nav">{nav.map(([n,I])=><button key={n} className={tab===n?'active':''} onClick={()=>{setTab(n);setMobileChatOpen(false);}}><span className="mobile-nav-icon"><I size={19}/>{n==='Inbox'&&pendingReviewCount>0&&<i className="mobile-nav-badge">{pendingReviewCount>99?'99+':pendingReviewCount}</i>}</span><span>{n}</span></button>)}</nav>
       {toast&&<div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
+      {subscriptionRequired&&<div className="subscription-lock-screen" role="alertdialog" aria-modal="true"><div className="subscription-lock-card"><span className="subscription-lock-icon"><ShieldCheck size={24}/></span><h2>Subscription required</h2><p>{subscriptionRequired}</p><button type="button" className="primary-button" onClick={()=>{setSubscriptionRequired('');setTab('Settings');setSettings('Payments');}}>View plans &amp; renew with Cashfree</button></div></div>}
     </div>
   );
 }
