@@ -626,7 +626,14 @@ function WorkspaceApp() {
         realtime.connection.on('disconnected',()=>{if(!disposed)console.info('Hupera realtime disconnected; background inbox sync remains active.');});
         realtime.connection.on('failed',()=>{if(disposed)return;console.warn('Hupera realtime entered failed state; retrying while polling remains active.');setDataError('');if(retryHandle!==undefined)window.clearTimeout(retryHandle);retryHandle=window.setTimeout(()=>{if(disposed)return;try{channel?.unsubscribe();}catch{}try{realtime?.close();}catch{}channel=null;realtime=null;void connect();},10000);});
       }catch(error){
-        if(!disposed)console.error('Hupera realtime connection failed',error);
+        if(!disposed){
+          console.warn('Hupera realtime setup could not complete; retrying while automatic sync remains active.',error);
+          try{channel?.unsubscribe();}catch{}
+          try{realtime?.close();}catch{}
+          channel=null;realtime=null;
+          if(retryHandle!==undefined)window.clearTimeout(retryHandle);
+          retryHandle=window.setTimeout(()=>{if(!disposed)void connect();},10000);
+        }
       }
     };
     void connect();
