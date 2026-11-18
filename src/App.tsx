@@ -69,6 +69,8 @@ function WorkspaceApp() {
   const [dataLoading,setDataLoading]=useState(true);
   const [dataError,setDataError]=useState('');
   const [unreadNotifications,setUnreadNotifications]=useState(0);
+  const pendingPushConversationRef=useRef('');
+  const workspaceRefreshQueued=useRef(false);
   const [notifications,setNotifications]=useState<any[]>([]);
   const [showNotifications,setShowNotifications]=useState(false);
   const [alertsEnabled,setAlertsEnabled]=useState(false);
@@ -124,6 +126,8 @@ function WorkspaceApp() {
   const human=String(active.handlingMode||'AI').toLowerCase()==='human';
   const filtered=useMemo(()=>chats.filter(c=>(c.name+' '+c.preview+' '+c.department+' '+c.upi+' '+c.status).toLowerCase().includes(search.toLowerCase())),[chats,search]);
   const pendingReviewCount=chats.reduce((total:any,chat:any)=>total+Math.max(Number(chat.unreadCount||0),Number(chat.pendingRequestCount||0),chat.needsAction?1:0),0);
+  const unreadNotificationItems=notifications.filter((item:any)=>!item.is_read).length;
+  const bellBadgeCount=pendingReviewCount+Math.max(0,unreadNotifications-unreadNotificationItems)+notifications.filter((item:any)=>!item.is_read&&!item.conversation_id).length;
 
   useEffect(()=>{
     chatNearBottomRef.current=true;
@@ -256,7 +260,8 @@ function WorkspaceApp() {
 
 
   const refreshWorkspace=async()=>{
-    if(workspaceSyncBusy.current||document.hidden)return;
+    if(document.hidden)return;
+    if(workspaceSyncBusy.current){workspaceRefreshQueued.current=true;return;}
     workspaceSyncBusy.current=true;setDataError('');
     try{
       const [dashboard,employees,appointments,inbox,notifications]=await Promise.all([
@@ -285,12 +290,18 @@ function WorkspaceApp() {
       });
       setWorkspace((old:any)=>({...old,dashboard,employees:employees.employees||[],appointments:bookings}));
       setChats(old=>mapped.map(chat=>{const previous=old.find(item=>item.id===chat.id);return previous?{...chat,messages:previous.messages,appointments:previous.appointments,payments:previous.payments}:chat;}));
+      const pendingPushId=pendingPushConversationRef.current;
+      if(pendingPushId){
+        if(mapped.some(chat=>chat.id===pendingPushId)){setSelected(pendingPushId);setMobileChatOpen(true);}
+        else{setSelected('');setMobileChatOpen(false);notify('The chat linked to this notification is not available in this workspace. Refresh the inbox and try again.');}
+        pendingPushConversationRef.current='';
+      }
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
-      if(mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
+      if(!pendingPushId&&mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){const error=e as Error&{code?:string};if(error.code==='SUBSCRIPTION_REQUIRED'){setSubscriptionRequired(error.message);setDataError('');}else setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
-    finally{setDataLoading(false);workspaceSyncBusy.current=false;}
+    finally{setDataLoading(false);workspaceSyncBusy.current=false;if(workspaceRefreshQueued.current){workspaceRefreshQueued.current=false;void refreshWorkspace();}}
   };
 
 
@@ -378,6 +389,8 @@ function WorkspaceApp() {
     let active=true;
     void CapacitorApp.addListener('backButton',({canGoBack})=>{
       if(!active)return;
+      const openReportMenu=document.querySelector<HTMLDetailsElement>('.report-export-menu[open]');
+      if(openReportMenu){openReportMenu.open=false;return;}
       if(tab==='Inbox'&&mobileChatOpen){setMobileChatOpen(false);return;}
       if(tab==='Settings'&&settings!=='Business profile'){setSettings('Business profile');return;}
       if(tab!=='Home'){setTab('Home');setMobileChatOpen(false);return;}
@@ -391,9 +404,8 @@ function WorkspaceApp() {
 
   useEffect(()=>{
     if(!Capacitor.isNativePlatform())return;
-    const unread=chats.reduce((total,chat)=>total+Math.max(0,Number(chat.unreadCount||0)),0)+unreadNotifications;
-    void Badge.set({count:unread}).catch(error=>console.warn('Hupera app badge update failed',error));
-  },[chats,unreadNotifications]);
+    void Badge.set({count:bellBadgeCount}).catch(error=>console.warn('Hupera app badge update failed',error));
+  },[bellBadgeCount]);
 
 
   // Native Firebase push registration. Ably remains the foreground real-time transport.
@@ -498,16 +510,19 @@ function WorkspaceApp() {
     };
   },[]);
 
-  // Notification taps open the relevant Hupera section.
+  // Every operational push opens the Inbox; select the exact conversation only after it is loaded.
   useEffect(()=>{
     const open=(event:Event)=>{
-      const data=(event as CustomEvent).detail||{};
+      const raw=(event as CustomEvent).detail||{};
+      const data=raw.data&&typeof raw.data==='object'?raw.data:raw;
       delete (window as any).__huperaPendingPush;
-      if(data.route==='appointment'){setTab('Appointment');setMobileChatOpen(false);return;}
-      if(data.route==='inbox'){
-        setTab('Inbox');
-        if(data.conversationId){setSelected(String(data.conversationId));setMobileChatOpen(true);}
-      }
+      const conversationId=String(data.conversationId||data.conversation_id||data.chatId||data.chat_id||data.thread_id||'').trim();
+      setTab('Inbox');
+      setSearch('');
+      setShowNotifications(false);
+      setMobileChatOpen(false);
+      pendingPushConversationRef.current=conversationId;
+      void refreshWorkspace();
     };
     window.addEventListener('hupera:push-open',open);
     const pending=(window as any).__huperaPendingPush;
@@ -753,16 +768,16 @@ function WorkspaceApp() {
           <div className="mobile-brand"><div className="brand-mark"><Bot size={20}/></div><b>Hupera <span>AI</span></b></div>
           <div className="top-actions">
             <div className="notification-wrap">
-              <button className="icon-btn notification-bell" onClick={()=>setShowNotifications(value=>!value)} aria-label={'Open notifications, '+unreadNotifications+' unread'} aria-expanded={showNotifications}><Bell size={18}/>{unreadNotifications>0&&<i className="top-badge">{unreadNotifications>99?'99+':unreadNotifications}</i>}</button>
+              <button className="icon-btn notification-bell" onClick={()=>setShowNotifications(value=>!value)} aria-label={'Open notifications, '+unreadNotifications+' unread'} aria-expanded={showNotifications}><Bell size={18}/>{bellBadgeCount>0&&<i className="top-badge">{bellBadgeCount>99?'99+':bellBadgeCount}</i>}</button>
               {showNotifications&&<div className="notification-panel">
                 <div className="notification-panel-head"><b>Notifications</b><button type="button" onClick={async()=>{try{await postHuperaAction('notifications_mark_all_read',{});setUnreadNotifications(0);setNotifications(old=>old.map(item=>({...item,is_read:true})));}catch(error){console.warn('Could not mark notifications read',error);}}}>Mark all read</button></div>
-                <div className="notification-items">{notifications.length?notifications.map((item:any)=><button type="button" key={item.id} className={'notification-item '+(!item.is_read?'unread':'')} onClick={async()=>{try{await postHuperaAction('notification_read',{notification_id:item.id});}catch(error){console.warn('Could not mark notification read',error);}setNotifications(old=>old.map(value=>value.id===item.id?{...value,is_read:true}:value));setUnreadNotifications(value=>Math.max(0,value-(item.is_read?0:1)));setShowNotifications(false);if(item.conversation_id){setTab('Inbox');setSelected(String(item.conversation_id));setMobileChatOpen(true);}else if(['appointment','booking','payment'].includes(String(item.kind||'').toLowerCase())){setTab('Appointment');setMobileChatOpen(false);}}}><i className="notification-dot"/><span><b>{item.title}</b><small>{item.body}</small><time>{item.created_at?new Date(item.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</time></span></button>):<div className="notification-empty">No notifications yet.</div>}</div>
+                <div className="notification-items">{notifications.length?notifications.map((item:any)=><button type="button" key={item.id} className={'notification-item '+(!item.is_read?'unread':'')} onClick={async()=>{try{await postHuperaAction('notification_read',{notification_id:item.id});}catch(error){console.warn('Could not mark notification read',error);}setNotifications(old=>old.map(value=>value.id===item.id?{...value,is_read:true}:value));setUnreadNotifications(value=>Math.max(0,value-(item.is_read?0:1)));setShowNotifications(false);setTab('Inbox');setShowNotifications(false);if(item.conversation_id){pendingPushConversationRef.current=String(item.conversation_id);setSelected('');setMobileChatOpen(false);void refreshWorkspace();}else{setMobileChatOpen(false);void refreshWorkspace();}}}><i className="notification-dot"/><span><b>{item.title}</b><small>{item.body}</small><time>{item.created_at?new Date(item.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</time></span></button>):<div className="notification-empty">No notifications yet.</div>}</div>
               </div>}
             </div>
             <button className="icon-btn" onClick={toggleTheme} aria-label={theme==='light'?'Switch to dark mode':'Switch to light mode'} title={theme==='light'?'Dark mode':'Light mode'}>
               {theme==='light'?<Moon size={19}/>:<Sun size={19}/>}
             </button>
-            <input ref={profilePhotoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(file.size>900000){notify('Choose a profile image smaller than 900 KB.');return;}if(!['image/png','image/jpeg','image/webp'].includes(file.type)){notify('Use a PNG, JPG or WebP profile image.');return;}setProfilePhotoBusy(true);try{const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('Could not read the selected image.'));reader.readAsDataURL(file);});await saveSettings({profile_image_url:dataUrl},{});notify('Profile picture synced to your Hupera workspace.');}catch(error){notify(error instanceof Error?error.message:'Could not update profile picture.');}finally{setProfilePhotoBusy(false);}}}/>
+            <input ref={profilePhotoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(file.size>9000000){notify('Choose a profile image smaller than 9 MB.');return;}if(!['image/png','image/jpeg','image/webp'].includes(file.type)){notify('Use a PNG, JPG or WebP profile image.');return;}setProfilePhotoBusy(true);try{const bitmap=await createImageBitmap(file);const scale=Math.min(1,512/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const context=canvas.getContext('2d');if(!context)throw new Error('Could not prepare the selected profile image.');context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const dataUrl=canvas.toDataURL('image/jpeg',0.78);if(dataUrl.length>500000)throw new Error('This photo could not be compressed enough. Choose a smaller image.');const result=await postHuperaAction<any>('settings_save',{organization:{profile_image_url:dataUrl},preferences:{}});const savedImage=String(result?.organization?.profile_image_url||'');if(result?.success!==true||!savedImage)throw new Error(result?.error||'The server did not confirm the profile photo update.');setSettingsData((old:any)=>({...old,organization:{...old?.organization,profile_image_url:savedImage}}));setWorkspace((old:any)=>({...old,dashboard:old.dashboard?{...old.dashboard,organization:{...old.dashboard.organization,profile_image_url:savedImage}}:old.dashboard}));notify('Profile photo updated and synced with your workspace.');void refreshWorkspace();}catch(error){notify(error instanceof Error?error.message:'Could not update profile picture.');}finally{setProfilePhotoBusy(false);}}}/>
             <button type="button" className="profile profile-avatar-trigger" onClick={()=>profilePhotoInput.current?.click()} title="Upload profile picture" aria-label="Upload profile picture" disabled={profilePhotoBusy}><span className="profile-avatar">{(settingsData?.organization?.profile_image_url||workspace.dashboard?.organization?.profile_image_url)?<img src={settingsData?.organization?.profile_image_url||workspace.dashboard?.organization?.profile_image_url} alt="Workspace profile"/>:(businessName||'H').slice(0,1).toUpperCase()}</span><span className="profile-label"><b>{profilePhotoBusy?'Saving photo…':businessName||'Hupera workspace'}</b><small>PROFILE</small></span></button>
           </div>
         </header>
@@ -854,7 +869,7 @@ function WorkspaceApp() {
           </>}
 
           {tab==='Appointment'&&<AppointmentPage days={days} setDays={setDays} updateDay={updateDay} updateBlock={updateBlock} items={availabilityItems} slot={slot} setSlot={setSlot} buffer={buffer} setBuffer={setBuffer} timezone={timezone} setTimezone={setTimezone} service={service} setService={setService} format={format} setFormat={setFormat} location={location} setLocation={setLocation} phone={phone} setPhone={setPhone} email={email} setEmail={setEmail} showPreview={showPreview} setShowPreview={setShowPreview} notify={notify} onSave={saveAvailability}/>}
-          {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports}/>}
+          {tab==='Reports'&&<Reports period={period} setPeriod={setPeriod} reports={workspace.reports} onNotify={notify}/>}
           {tab==='Settings'&&<SettingsPage employees={workspace.employees||[]} section={settings} setSection={setSettings} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} enableAlerts={enableAlerts} settingsData={settingsData} saving={settingsSaving} onSave={saveSettings} alertsEnabled={alertsEnabled} pushPermission={pushPermission} pushError={pushError} nativePlatform={Capacitor.isNativePlatform()} paymentData={cashfreePaymentData} onRefreshPayment={refreshCashfreePayment} notify={notify}/> }
 
           <footer className="footer"><span>Hupera AI Client · v1.1.0</span><span><ShieldCheck size={13}/> Secure workspace · Live organization data</span></footer>
@@ -947,7 +962,7 @@ function slotsFor(from:string,to:string,duration:number,buffer:number) {
   return out;
 }
 
-function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=>void;reports:any}) {
+function Reports({period,setPeriod,reports,onNotify}:{period:string;setPeriod:(s:string)=>void;reports:any;onNotify:(message:string)=>void}) {
   const [exporting,setExporting]=useState('');
   const [exportStatus,setExportStatus]=useState('');
   const bookings=reports?.appointments||{},messages=reports?.messages||{},revenue=reports?.revenue||{},customers=reports?.customers||{},conversations=reports?.conversations||{},ai=reports?.ai_responses||{},conversions=reports?.conversions||{},leads=reports?.leads||{};
@@ -979,7 +994,7 @@ function Reports({period,setPeriod,reports}:{period:string;setPeriod:(s:string)=
   const runExport=async(format:string,action:()=>Promise<string>)=>{
     if(exporting)return;
     setExporting(format);setExportStatus('Preparing '+format+' report…');
-    try{setExportStatus(await action());}
+    try{const result=await action();setExportStatus(result);onNotify(Capacitor.isNativePlatform()?'Report downloaded successfully':'Report download started successfully');const menu=document.querySelector<HTMLDetailsElement>('.report-export-menu[open]');if(menu)menu.open=false;}
     catch(error){setExportStatus(error instanceof Error?error.message:'Report export failed. Please try again.');}
     finally{setExporting('');}
   };
