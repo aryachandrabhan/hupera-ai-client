@@ -303,7 +303,7 @@ function WorkspaceApp() {
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
-      if(!pendingPush&&mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
+      // Never auto-open the first inbox conversation. A chat opens only after an explicit user selection or a resolved notification target.
     }catch(e){const error=e as Error&{code?:string};if(error.code==='SUBSCRIPTION_REQUIRED'){setSubscriptionRequired(error.message);setDataError('');}else setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
     finally{setDataLoading(false);workspaceSyncBusy.current=false;if(workspaceRefreshQueued.current){workspaceRefreshQueued.current=false;void refreshWorkspace();}}
   };
