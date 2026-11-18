@@ -831,3 +831,18 @@ button {
 .dark-theme .summary-line b{color:#f1f5fb!important}
 .dark-theme .summary-line small{color:#b6c4d8!important}
 .dark-theme .panel-inner .summary-line{background:#1e293b!important;border-color:#3a4b65!important}
+
+
+/* Android polish: keep the bottom navigation fixed, expose every inbox row,
+   and render report export choices as an anchored overlay instead of resizing the page. */
+@media(max-width:650px){
+  .main-area{padding-bottom:calc(88px + env(safe-area-inset-bottom))!important;min-width:0}
+  .mobile-nav{left:0!important;right:0!important;bottom:0!important;width:100%!important;min-height:62px;padding-bottom:calc(7px + env(safe-area-inset-bottom))!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;z-index:100}
+  .mobile-nav button{min-width:0;white-space:nowrap}
+  .inbox-panel:not(.mobile-chat-open){height:calc(100dvh - 250px);max-height:calc(100dvh - 250px);min-height:260px}
+  .inbox-panel:not(.mobile-chat-open) .inbox-list{display:flex;flex:1 1 auto;min-height:0;height:100%;overflow:hidden}
+  .inbox-panel:not(.mobile-chat-open) .inbox-chat-list{display:block;flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(92px + env(safe-area-inset-bottom))!important;scroll-padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+  .report-export-menu{position:static!important;min-width:0;max-width:100%}
+  .report-export-menu>summary{max-width:100%;touch-action:manipulation}
+  .report-export-menu[open] .report-export-options{position:fixed!important;left:12px!important;right:12px!important;top:auto!important;bottom:calc(76px + env(safe-area-inset-bottom))!important;width:auto!important;min-width:0!important;max-width:none!important;max-height:min(58dvh,420px);overflow-y:auto;z-index:150;border-radius:16px;box-shadow:0 18px 48px rgba(15,23,42,.28)}
+}
