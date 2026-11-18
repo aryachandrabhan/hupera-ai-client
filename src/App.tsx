@@ -448,6 +448,11 @@ function WorkspaceApp() {
           window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:data}));
         });
         listeners.push(actionPerformed);
+        const localActionPerformed=await LocalNotifications.addListener('localNotificationActionPerformed',action=>{
+          const data=action.notification?.extra||{};
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:data}));
+        });
+        listeners.push(localActionPerformed);
         const received=await PushNotifications.addListener('pushNotificationReceived',notification=>{
           if(cancelled)return;
           void refreshWorkspace();
