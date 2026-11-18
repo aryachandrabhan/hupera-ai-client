@@ -826,3 +826,8 @@ button {
 }
 
 @media(max-width:650px){.profile.profile-avatar-trigger{display:flex!important;align-items:center;justify-content:center;margin-left:8px}.profile-avatar-trigger .profile-label{display:none}}
+
+.dark-theme .summary-line{background:#1e293b!important;border-color:#3a4b65!important;color:#e7edf7}
+.dark-theme .summary-line b{color:#f1f5fb!important}
+.dark-theme .summary-line small{color:#b6c4d8!important}
+.dark-theme .panel-inner .summary-line{background:#1e293b!important;border-color:#3a4b65!important}
