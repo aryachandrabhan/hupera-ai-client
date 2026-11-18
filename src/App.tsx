@@ -69,7 +69,7 @@ function WorkspaceApp() {
   const [dataLoading,setDataLoading]=useState(true);
   const [dataError,setDataError]=useState('');
   const [unreadNotifications,setUnreadNotifications]=useState(0);
-  const pendingPushConversationRef=useRef('');
+  const pendingPushConversationRef=useRef<{conversationId:string;customerName:string}|null>(null);
   const workspaceRefreshQueued=useRef(false);
   const [notifications,setNotifications]=useState<any[]>([]);
   const [showNotifications,setShowNotifications]=useState(false);
@@ -291,16 +291,19 @@ function WorkspaceApp() {
       });
       setWorkspace((old:any)=>({...old,dashboard,employees:employees.employees||[],appointments:bookings}));
       setChats(old=>mapped.map(chat=>{const previous=old.find(item=>item.id===chat.id);return previous?{...chat,messages:previous.messages,appointments:previous.appointments,payments:previous.payments}:chat;}));
-      const pendingPushId=pendingPushConversationRef.current;
-      if(pendingPushId){
-        if(mapped.some(chat=>chat.id===pendingPushId)){setSelected(pendingPushId);setMobileChatOpen(true);}
-        else{setSelected('');setMobileChatOpen(false);notify('The chat linked to this notification is not available in this workspace. Refresh the inbox and try again.');}
-        pendingPushConversationRef.current='';
+      const pendingPush=pendingPushConversationRef.current;
+      const pendingPushId=pendingPush?.conversationId||'';
+      if(pendingPush){
+        let target=pendingPushId?mapped.find(chat=>chat.id===pendingPushId):undefined;
+        if(!target&&pendingPush.customerName){const wanted=pendingPush.customerName.trim().toLocaleLowerCase();target=mapped.find(chat=>chat.name.trim().toLocaleLowerCase()===wanted);}
+        if(target){setSelected(target.id);setMobileChatOpen(true);}
+        else{setSelected('');setMobileChatOpen(false);notify(pendingPushId?'The exact conversation from this notification was not found. No other chat was opened.':'This notification did not include a conversation ID. Inbox opened without selecting another customer.');}
+        pendingPushConversationRef.current=null;
       }
       const urgent=new Set(mapped.filter(c=>c.needsAction).map(c=>c.id));
       if(priorityInitialized.current&&alertsEnabled&&typeof Notification!=='undefined'&&Notification.permission==='granted'){for(const c of mapped){if(c.needsAction&&!previousPriorityIds.current.has(c.id)){new Notification(c.priorityType==='payment_confirmation'?'Payment confirmation needs attention':'New appointment request',{body:c.name+' · '+c.preview,tag:'hupera-'+c.id});const ctx=alertAudio.current;if(ctx&&ctx.state==='running'){const oscillator=ctx.createOscillator();const gain=ctx.createGain();oscillator.frequency.value=880;gain.gain.value=0.12;oscillator.connect(gain);gain.connect(ctx.destination);oscillator.start();oscillator.stop(ctx.currentTime+0.18);}}}}
       previousPriorityIds.current=urgent;priorityInitialized.current=true;
-      if(!pendingPushId&&mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
+      if(!pendingPush&&mapped.length&&!mapped.some(c=>c.id===selected))setSelected(mapped[0].id);
     }catch(e){const error=e as Error&{code?:string};if(error.code==='SUBSCRIPTION_REQUIRED'){setSubscriptionRequired(error.message);setDataError('');}else setDataError(e instanceof Error?e.message:'Unable to load workspace data.');}
     finally{setDataLoading(false);workspaceSyncBusy.current=false;if(workspaceRefreshQueued.current){workspaceRefreshQueued.current=false;void refreshWorkspace();}}
   };
@@ -446,12 +449,12 @@ function WorkspaceApp() {
         listeners.push(registrationError);
         const actionPerformed=await PushNotifications.addListener('pushNotificationActionPerformed',action=>{
           const data=action.notification?.data||{};
-          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:data}));
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:{...data,notificationTitle:action.notification?.title||''}}));
         });
         listeners.push(actionPerformed);
         const localActionPerformed=await LocalNotifications.addListener('localNotificationActionPerformed',action=>{
           const data=action.notification?.extra||{};
-          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:data}));
+          window.dispatchEvent(new CustomEvent('hupera:push-open',{detail:{...data,notificationTitle:action.notification?.title||''}}));
         });
         listeners.push(localActionPerformed);
         const received=await PushNotifications.addListener('pushNotificationReceived',notification=>{
@@ -523,11 +526,12 @@ function WorkspaceApp() {
       const data=raw.data&&typeof raw.data==='object'?raw.data:raw;
       delete (window as any).__huperaPendingPush;
       const conversationId=String(data.conversationId||data.conversation_id||data.chatId||data.chat_id||data.thread_id||'').trim();
+      const customerName=String(data.customerName||data.customer_name||data.sender_name||data.notificationTitle||'').trim();
       setTab('Inbox');
       setSearch('');
       setShowNotifications(false);
       setMobileChatOpen(false);
-      pendingPushConversationRef.current=conversationId;
+      pendingPushConversationRef.current={conversationId,customerName};
       void refreshWorkspace();
     };
     window.addEventListener('hupera:push-open',open);
