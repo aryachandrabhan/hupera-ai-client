@@ -759,3 +759,68 @@ button {
 .report-metrics + .insight-card { margin-top:16px; }
 .insight-card + .insight-card { margin-top:14px; }
 .insight-card + .report-data-panel { margin-top:16px; }
+
+
+/* Premium mobile polish: synced profile avatar, safe inbox viewport and dark surfaces. */
+.profile-avatar-trigger{display:flex;align-items:center;gap:9px;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.profile-avatar-trigger:disabled{opacity:.65;cursor:wait}
+.profile-avatar-trigger .profile-avatar{width:38px;height:38px;overflow:hidden;flex:0 0 38px;border:1px solid #dbe5f2;box-shadow:0 2px 8px rgba(15,23,42,.12)}
+.profile-avatar-trigger .profile-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.profile-avatar-trigger .profile-label b,.profile-avatar-trigger .profile-label small{display:block}
+.profile-avatar-trigger .profile-label b{font-size:12px;color:#23324b}
+.profile-avatar-trigger .profile-label small{font-size:9px;color:#8794a8;letter-spacing:1px;margin-top:3px}
+.dark-theme .profile-avatar-trigger .profile-label b{color:#f1f5fb}
+.dark-theme .profile-avatar-trigger .profile-label small{color:#aebbd0}
+.appointment-payment-settings{display:grid;gap:13px;max-width:650px}
+.appointment-payment-settings>label{display:flex;flex-direction:column;gap:7px;color:#53647c;font-size:12px;font-weight:700}
+.appointment-payment-settings input:not([type=checkbox]),.appointment-payment-settings select{width:100%;min-height:44px;padding:10px 12px;border:1px solid #dce4ee;border-radius:9px;background:#f9fbfe;color:#17243b}
+.appointment-payment-settings input[type=file]{padding:9px}
+.appointment-qr-preview{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.appointment-qr-preview img{width:150px;height:150px;object-fit:contain;padding:8px;background:#fff;border:1px solid #e2e8f0;border-radius:12px}
+.appointment-deposit-divider{height:1px;background:#e5ebf2;margin:8px 0}
+.appointment-payment-settings .appointment-deposit-toggle{display:flex;flex-direction:row;align-items:center;gap:10px;padding:12px;border:1px solid #dce4ee;border-radius:10px;background:#f8fafc}
+.appointment-payment-settings .appointment-deposit-toggle input{width:18px;height:18px;accent-color:#16865b}
+.appointment-gateway-status{display:grid;gap:6px;padding:13px;border:1px solid #dce4ee;border-radius:11px;background:#f8fafc;font-size:11px}
+.appointment-gateway-status b{color:#1e293b}
+.appointment-gateway-status span{color:#52647c}
+.appointment-gateway-status small{color:#7b899d;line-height:1.5}
+.subscription-lock-screen{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:24px;background:rgba(3,10,22,.78);backdrop-filter:blur(10px)}
+.subscription-lock-card{width:min(100%,440px);padding:28px;border:1px solid #34465e;border-radius:20px;background:#111f33;color:#e7edf7;box-shadow:0 28px 90px rgba(0,0,0,.45);text-align:center}
+.subscription-lock-icon{width:54px;height:54px;margin:0 auto 14px;display:grid;place-items:center;border-radius:16px;background:#1d3555;color:#8db9ff}
+.subscription-lock-card h2{margin:0 0 10px;color:#f8fafc;font:800 22px Manrope,sans-serif}
+.subscription-lock-card p{margin:0 0 20px;color:#c1cee0;font-size:13px;line-height:1.65}
+.subscription-lock-card .primary-button{width:100%;justify-content:center}
+.dark-theme .appointment-payment-settings>label{color:#c2cee0}
+.dark-theme .appointment-payment-settings input:not([type=checkbox]),.dark-theme .appointment-payment-settings select{background:#0d1829;color:#f1f5fb;border-color:#3a4b65}
+.dark-theme .appointment-deposit-divider{background:#34465e}
+.dark-theme .appointment-payment-settings .appointment-deposit-toggle,.dark-theme .appointment-gateway-status{background:#1e293b;border-color:#3a4b65;color:#e7edf7}
+.dark-theme .appointment-gateway-status b,.dark-theme .appointment-gateway-status span{color:#e7edf7}
+.dark-theme .appointment-gateway-status small{color:#b6c4d8}
+.dark-theme .appointment-qr-preview img{border-color:#40536e}
+.dark-theme .appointment-footer{background:#1e293b!important;border:1px solid #334155!important;border-radius:13px;padding:10px!important;box-shadow:0 12px 30px rgba(0,0,0,.35);color:#f1f5fb}
+.dark-theme .appointment-footer .outline-button{background:#26364d!important;border-color:#475569!important;color:#e7edf7!important}
+.dark-theme .appointment-footer .primary-button{background:#16865b!important;border-color:#16865b!important;color:#fff!important}
+.dark-theme .report-data-panel .summary-line,.dark-theme .report-data-panel .summary-line>div{background:#1e293b!important;border-color:#3a4b65!important}
+.dark-theme .report-data-panel .summary-line b{color:#f1f5fb!important}
+.dark-theme .report-data-panel .summary-line small{color:#b6c4d8!important}
+.dark-theme .report-metrics .metric-card,.dark-theme .metric-card{background:#1e293b!important;border-color:#334155!important}
+.dark-theme .metric-value,.dark-theme .metric-label{color:#f1f5fb!important}
+.dark-theme .metric-foot small{color:#b6c4d8!important}
+.dark-theme .report-data-panel{background:#142136!important}
+@media(max-width:650px){
+  .profile-avatar-trigger{gap:0}
+  .profile-avatar-trigger .profile-label{display:none}
+  .profile-avatar-trigger .profile-avatar{width:36px;height:36px;flex-basis:36px}
+  .inbox-panel:not(.mobile-chat-open){height:calc(100dvh - 260px);min-height:0;max-height:calc(100dvh - 260px);overflow:hidden}
+  .inbox-panel:not(.mobile-chat-open) .inbox-list{height:100%;min-height:0;flex:1 1 auto}
+  .inbox-panel:not(.mobile-chat-open) .inbox-list-head{padding:10px 10px 8px;gap:7px}
+  .inbox-panel:not(.mobile-chat-open) .inbox-list-head h2{font-size:12px}
+  .inbox-panel:not(.mobile-chat-open) .inbox-list-head .outline-button{min-height:34px;padding:6px 8px;font-size:9px}
+  .inbox-panel:not(.mobile-chat-open) .search-field{margin:0 10px 7px;padding:7px 9px}
+  .inbox-panel:not(.mobile-chat-open) .chat-row{min-height:60px;padding:8px 10px;gap:8px}
+  .inbox-panel:not(.mobile-chat-open) .chat-row .avatar{width:34px;height:34px;flex-basis:34px}
+  .inbox-panel:not(.mobile-chat-open) .chat-copy p{margin:3px 0;font-size:10px}
+  .inbox-panel:not(.mobile-chat-open) .chat-copy b{font-size:11px}
+  .inbox-panel:not(.mobile-chat-open) .inbox-chat-list{padding-bottom:calc(14px + env(safe-area-inset-bottom));scroll-padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  .main-area{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+}
